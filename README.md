@@ -15,8 +15,8 @@ Quick Drop Zone is a native SwiftUI/AppKit menu-bar utility for macOS 26 and new
 
 ## Download and open
 
-1. Open the [v1.1.0 release page](https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/tag/v1.1.0).
-2. Download `Quick-Drop-Zone-1.1.0.zip` from **Assets** and unzip it.
+1. Open the [v1.1.1 release page](https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/tag/v1.1.1).
+2. Download `Quick-Drop-Zone-1.1.1.zip` from **Assets** and unzip it.
 3. Move **Quick Drop Zone.app** to **Applications**.
 4. The app is ad-hoc signed, not notarized. The first time, Control-click **Quick Drop Zone.app**, choose **Open**, then choose **Open** again.
 5. Look for the tray/download icon in the menu bar. Click it to open the drop window. Use **Settings** to add favorite folders.

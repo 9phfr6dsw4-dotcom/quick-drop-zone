@@ -202,9 +202,11 @@ final class SuggestionAndPolicyTests: XCTestCase {
         for url in related + unrelated { try Data().write(to: url) }
 
         let groups = FolderGrouping.suggest(for: related + unrelated)
-        XCTAssertEqual(groups.map(\.name), ["Acme"])
+        XCTAssertEqual(groups.map(\.name), ["Acme", "Contoso", "Northstar"])
         XCTAssertEqual(groups.first?.files.count, 3)
-        XCTAssertTrue(groups.allSatisfy { $0.files.allSatisfy { related.contains($0) } })
+        XCTAssertTrue(groups[0].files.allSatisfy { related.contains($0) })
+        XCTAssertFalse(groups.map(\.name).contains("Project"))
+        XCTAssertFalse(groups.map(\.name).contains("Report"))
         XCTAssertTrue(groups[0].reason.contains("Acme"))
         var editable = groups[0]
         editable.name = "Acme invoices"

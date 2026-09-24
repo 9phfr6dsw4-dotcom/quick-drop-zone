@@ -76,6 +76,11 @@ public enum SuggestionEngine {
         "the", "and", "for", "from", "with", "your", "copy", "final", "document", "documents",
         "invoice", "invoices", "bill", "bills", "receipt", "receipts", "payment", "statement",
         "screenshot", "screenshots", "screen", "shot", "capture", "image", "photo", "scan",
+        "images", "photos", "scans", "picture", "pictures", "media", "video", "videos", "audio",
+        "project", "projects", "report", "reports", "annual", "brief", "proposal", "proposals",
+        "plan", "plans", "notes", "note", "summary", "summaries", "draft", "drafts", "update", "updates",
+        "meeting", "meetings", "export", "exports", "download", "downloads", "file", "files",
+        "company", "companies", "corporation", "corp", "inc", "llc", "ltd", "limited", "group",
         "pdf", "png", "jpg", "jpeg", "heic", "tif", "tiff", "doc", "docx", "xls", "xlsx", "csv", "zip",
         "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
         "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec"

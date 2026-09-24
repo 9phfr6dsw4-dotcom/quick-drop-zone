@@ -35,7 +35,7 @@ jobs:
         with:
           name: Quick-Drop-Zone-${{ github.run_number }}
           path: |
-            dist/Quick-Drop-Zone-1.1.0.zip
-            dist/Quick-Drop-Zone-1.1.0.zip.sha256
+            dist/Quick-Drop-Zone-1.1.1.zip
+            dist/Quick-Drop-Zone-1.1.1.zip.sha256
           if-no-files-found: error
           retention-days: 30
