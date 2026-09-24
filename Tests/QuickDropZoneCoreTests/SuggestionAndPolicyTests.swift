@@ -136,22 +136,26 @@ final class SuggestionAndPolicyTests: XCTestCase {
         try FileManager.default.removeItem(at: root)
     }
 
-    func testFolderGroupingSuggestsScreenshotsAndYearBasedPDFsOnlyForGroups() throws {
+    func testFolderGroupingRequiresSharedMeaningfulSubjectNotTypeOrDate() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let a = root.appendingPathComponent("invoice-a.pdf")
-        let b = root.appendingPathComponent("invoice-b.pdf")
-        let c = root.appendingPathComponent("Screenshot 1.png")
-        let d = root.appendingPathComponent("Screen Shot 2.png")
-        let isolated = root.appendingPathComponent("notes.txt")
-        for url in [a, b, c, d, isolated] { try Data().write(to: url) }
-        let date = ISO8601DateFormatter().date(from: "2025-06-01T12:00:00Z")!
-        for url in [a, b] { try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path) }
+        let related = [
+            root.appendingPathComponent("Acme Invoice Jan.pdf"),
+            root.appendingPathComponent("Acme Contract Renewal.docx"),
+            root.appendingPathComponent("Acme Receipt Feb.pdf")
+        ]
+        let unrelated = [
+            root.appendingPathComponent("Northstar brief.pdf"),
+            root.appendingPathComponent("Contoso proposal.pdf"),
+            root.appendingPathComponent("Screenshot 1.png"),
+            root.appendingPathComponent("Screen Shot 2.png")
+        ]
+        for url in related + unrelated { try Data().write(to: url) }
 
-        let groups = FolderGrouping.suggest(for: [a, b, c, d, isolated])
-        XCTAssertEqual(Set(groups.map(\.name)), Set(["PDFs 2025", "Screenshots"]))
-        XCTAssertEqual(groups.first(where: { $0.name == "PDFs 2025" })?.files.count, 2)
-        XCTAssertFalse(groups.contains(where: { $0.files.contains(isolated) }))
+        let groups = FolderGrouping.suggest(for: related + unrelated)
+        XCTAssertEqual(groups.map(\.name), ["Acme"])
+        XCTAssertEqual(groups.first?.files.count, 3)
+        XCTAssertTrue(groups.allSatisfy { $0.files.allSatisfy { related.contains($0) } })
 
         try FileManager.default.removeItem(at: root)
     }
