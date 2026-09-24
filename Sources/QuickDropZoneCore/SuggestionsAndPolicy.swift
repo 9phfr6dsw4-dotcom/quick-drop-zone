@@ -68,91 +68,126 @@ public struct DestinationSuggestion: Equatable {
 }
 
 public enum SuggestionEngine {
+    private static let screenshotImageExtensions: Set<String> = ["png", "jpg", "jpeg", "heic", "tif", "tiff"]
+    private static let learningNoise: Set<String> = [
+        "the", "and", "for", "from", "with", "your", "copy", "final", "document", "documents",
+        "invoice", "invoices", "bill", "bills", "receipt", "receipts", "payment", "statement",
+        "screenshot", "screenshots", "screen", "shot", "capture", "image", "photo", "scan",
+        "pdf", "png", "jpg", "jpeg", "heic", "tif", "tiff", "doc", "docx", "xls", "xlsx", "csv", "zip",
+        "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+        "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec"
+    ]
+
     public static func suggest(
         fileName: String,
         destinations: [Destination],
         rules: [DestinationRule],
-        learning: [LearningRecord]
+        learning: [LearningRecord],
+        isScreenCapture: Bool = false
     ) -> DestinationSuggestion? {
         guard !destinations.isEmpty else { return nil }
         let extensionName = URL(fileURLWithPath: fileName).pathExtension.lowercased()
         let availableIDs = Set(destinations.map(\.id))
+        let exactTokens = words(in: fileName)
         let tokens = filenameTokens(fileName)
+        let isMetadataScreenshot = isScreenCapture && screenshotImageExtensions.contains(extensionName)
+        let isFilenameScreenshot = extensionName == "png" && isScreenshotFilename(fileName)
+        let isScreenshot = isMetadataScreenshot || isFilenameScreenshot
+        let activeRules = rules.filter { $0.isEnabled && availableIDs.contains($0.destinationID) }
 
-        if let rule = rules.first(where: { rule in
-            guard rule.isEnabled, availableIDs.contains(rule.destinationID) else { return false }
+        let matchingRule = activeRules.first { rule in
             let extensionMatches = rule.extensions.isEmpty || rule.extensions.contains(extensionName)
             let keywordMatches = rule.keywords.isEmpty || rule.keywords.contains { keyword in
-                fileName.localizedCaseInsensitiveContains(keyword)
+                let keywordTokens = words(in: keyword)
+                guard !keywordTokens.isEmpty else { return false }
+                if keywordTokens.isSubset(of: exactTokens) { return true }
+                return isMetadataScreenshot && keywordTokens == ["screenshot"]
             }
             return extensionMatches && keywordMatches
-        }) {
-            return DestinationSuggestion(destinationID: rule.destinationID, reason: "Matched rule: \(rule.name)")
+        }
+        if let matchingRule {
+            return DestinationSuggestion(destinationID: matchingRule.destinationID, reason: "Matches your \(matchingRule.name) rule")
         }
 
-        let scoredLearning: [(record: LearningRecord, score: Int)] = learning.compactMap { record in
-            guard availableIDs.contains(record.destinationID) else { return nil }
-            let extensionScore: Int = (!extensionName.isEmpty && record.fileExtension == extensionName) ? 1 : 0
-            let overlapCount = tokens.intersection(record.tokens).count
-            let score = extensionScore + (overlapCount * 2)
-            return (record: record, score: score)
+        // A rule-targeted folder is off-limits to other heuristics when its own rule did not match.
+        let lockedDestinationIDs = Set(activeRules.map(\.destinationID))
+
+        let examplesByDestination = Dictionary(grouping: learning.filter { record in
+            availableIDs.contains(record.destinationID)
+                && !lockedDestinationIDs.contains(record.destinationID)
+                && !extensionName.isEmpty
+                && record.fileExtension == extensionName
+                && !tokens.isDisjoint(with: meaningfulTokens(record.tokens))
+        }, by: \.destinationID)
+        let repeatedPatterns = examplesByDestination.compactMap { destinationID, examples -> (String, Int)? in
+            let distinctExamples = Set(examples.map { $0.tokens.sorted().joined(separator: "|") })
+            guard distinctExamples.count >= 3 else { return nil }
+            return (destinationID, distinctExamples.count)
         }
-        let learnedMatch = scoredLearning
-            .filter { $0.score > 0 }
-            .sorted { lhs, rhs in
-                lhs.score == rhs.score ? lhs.record.updatedAt > rhs.record.updatedAt : lhs.score > rhs.score
-            }
-            .first
-        if let learnedMatch {
-            return DestinationSuggestion(destinationID: learnedMatch.record.destinationID, reason: "Based on similar files you organized")
+        if let learnedMatch = repeatedPatterns.max(by: { $0.1 < $1.1 }) {
+            return DestinationSuggestion(
+                destinationID: learnedMatch.0,
+                reason: "Similar to files you moved before (\(learnedMatch.1) examples)"
+            )
         }
 
-        return builtInSuggestion(fileName: fileName, extensionName: extensionName, tokens: tokens, destinations: destinations)
+        return builtInSuggestion(
+            fileName: fileName,
+            extensionName: extensionName,
+            tokens: exactTokens,
+            destinations: destinations.filter { !lockedDestinationIDs.contains($0.id) },
+            isScreenshot: isScreenshot
+        )
     }
 
     public static func filenameTokens(_ text: String) -> Set<String> {
-        let words = text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
-        let ignored: Set<String> = ["the", "and", "for", "from", "with", "your", "copy", "final", "document"]
-        return Set(words.filter { $0.count > 2 && !ignored.contains($0) })
+        meaningfulTokens(words(in: URL(fileURLWithPath: text).deletingPathExtension().lastPathComponent))
+    }
+
+    private static func words(in text: String) -> Set<String> {
+        Set(text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty })
+    }
+
+    private static func meaningfulTokens(_ tokens: Set<String>) -> Set<String> {
+        Set(tokens.filter { token in
+            token.count >= 4 && !learningNoise.contains(token) && Int(token) == nil
+        })
+    }
+
+    private static func isScreenshotFilename(_ fileName: String) -> Bool {
+        let stem = URL(fileURLWithPath: fileName).deletingPathExtension().lastPathComponent.lowercased()
+        return stem == "screenshot" || stem.hasPrefix("screenshot ") || stem.hasPrefix("screenshot-")
+            || stem == "screen shot" || stem.hasPrefix("screen shot ") || stem.hasPrefix("screen shot-")
     }
 
     private static func builtInSuggestion(
         fileName: String,
         extensionName: String,
         tokens: Set<String>,
-        destinations: [Destination]
+        destinations: [Destination],
+        isScreenshot: Bool
     ) -> DestinationSuggestion? {
-        let folderMatchers: [(Set<String>, Set<String>, String)] = [
-            (["pdf"], ["bill", "bills", "invoice", "receipt", "receipts", "payment"], "Invoice or bill PDF"),
-            (["pdf"], ["tax", "taxes"], "Tax document PDF"),
-            (["pdf", "doc", "docx", "xls", "xlsx"], ["car", "vehicle", "automotive", "auto", "maintenance", "registration"], "Vehicle-related document"),
-            (["png", "jpg", "jpeg", "heic", "webp"], ["screenshot", "screenshots"], "Screenshot image")
+        if isScreenshot,
+           let destination = destinations.first(where: { words(in: $0.name).contains("screenshots") || words(in: $0.name).contains("screenshot") }) {
+            let reason = isFilenameScreenshot ? "Filename matches macOS screenshot naming" : "macOS marks this as a screen capture"
+            return DestinationSuggestion(destinationID: destination.id, reason: reason)
+        }
+
+        let subjectMatchers: [(Set<String>, Set<String>, Set<String>, String)] = [
+            (["pdf", "doc", "docx"], ["bill", "bills", "invoice", "invoices", "receipt", "receipts"], ["bill", "bills", "invoice", "invoices", "receipts", "receipts"], "Matches invoice or bill wording"),
+            (["pdf", "doc", "docx"], ["tax", "taxes", "irs"], ["tax", "taxes", "irs"], "Matches tax-document wording"),
+            (["pdf", "doc", "docx"], ["car", "vehicle", "automotive", "maintenance", "registration"], ["car", "cars", "vehicle", "vehicles", "automotive"], "Matches vehicle-document wording")
         ]
 
-        for (extensions, triggers, reason) in folderMatchers where extensions.contains(extensionName) && !tokens.isDisjoint(with: triggers) {
-            if let destination = destinations.first(where: { folderName in
-                let folderTokens = filenameTokens(folderName.name)
-                return !folderTokens.isDisjoint(with: triggers)
-            }) {
+        for (extensions, filenameTerms, folderTerms, reason) in subjectMatchers
+        where extensions.contains(extensionName) && !tokens.isDisjoint(with: filenameTerms) {
+            if let destination = destinations.first(where: { !words(in: $0.name).isDisjoint(with: folderTerms) }) {
                 return DestinationSuggestion(destinationID: destination.id, reason: reason)
             }
         }
-
-        let categoryByExtension: [String: Set<String>] = [
-            "pdf": ["pdf", "document", "documents"],
-            "png": ["image", "images", "picture", "pictures", "screenshot", "screenshots"],
-            "jpg": ["image", "images", "picture", "pictures"],
-            "jpeg": ["image", "images", "picture", "pictures"],
-            "heic": ["image", "images", "picture", "pictures"],
-            "doc": ["document", "documents"],
-            "docx": ["document", "documents"],
-            "csv": ["spreadsheet", "spreadsheets", "finance"],
-            "xlsx": ["spreadsheet", "spreadsheets", "finance"],
-            "zip": ["archive", "archives"]
-        ]
-        guard let categoryTokens = categoryByExtension[extensionName] else { return nil }
-        guard let destination = destinations.first(where: { !filenameTokens($0.name).isDisjoint(with: categoryTokens) }) else { return nil }
-        return DestinationSuggestion(destinationID: destination.id, reason: "Matched file type: .\(extensionName)")
+        return nil
     }
 }
 

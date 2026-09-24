@@ -25,10 +25,14 @@ final class SuggestionAndPolicyTests: XCTestCase {
 
     func testLearningUsesExtensionAndFilenameTokens() {
         let destinations = [Destination(id: "taxes", name: "Taxes")]
-        let learning = [LearningRecord(fileExtension: "pdf", tokens: ["irs", "tax"], destinationID: "taxes")]
+        let learning = [
+            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "jan"], destinationID: "taxes"),
+            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "feb"], destinationID: "taxes"),
+            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "mar"], destinationID: "taxes")
+        ]
 
         let suggestion = SuggestionEngine.suggest(
-            fileName: "IRS tax statement.pdf",
+            fileName: "Acme utility April.pdf",
             destinations: destinations,
             rules: [],
             learning: learning
@@ -36,6 +40,26 @@ final class SuggestionAndPolicyTests: XCTestCase {
 
         XCTAssertEqual(suggestion?.destinationID, "taxes")
         XCTAssertTrue(suggestion?.reason.localizedCaseInsensitiveContains("similar") == true)
+    }
+
+    func testFilenameScreenshotFallbackIsLimitedToPNG() {
+        let destination = [Destination(id: "screenshots", name: "Screenshots")]
+        for fileName in ["Screenshot 01.jpg", "Screen Shot 02.heic", "Screenshot 03.pdf"] {
+            XCTAssertNil(SuggestionEngine.suggest(fileName: fileName, destinations: destination, rules: [], learning: []))
+        }
+    }
+
+    func testMacScreenshotMetadataMatchesPNGRuleEvenWithoutScreenshotName() {
+        let rule = DestinationRule(name: "PNG screenshots", extensions: ["png"], keywords: ["screenshot"], destinationID: "screenshots")
+        let suggestion = SuggestionEngine.suggest(
+            fileName: "capture-2026-04-01.png",
+            destinations: [Destination(id: "screenshots", name: "Screenshots")],
+            rules: [rule],
+            learning: [],
+            isScreenCapture: true
+        )
+        XCTAssertEqual(suggestion?.destinationID, "screenshots")
+        XCTAssertEqual(suggestion?.reason, "Matches your PNG screenshots rule")
     }
 
     func testBuiltInSuggestionMatchesBillsFolderForInvoicePDF() {
@@ -80,7 +104,7 @@ final class SuggestionAndPolicyTests: XCTestCase {
         XCTAssertNil(extensionOnly)
 
         let tokenOnly = SuggestionEngine.suggest(
-            fileName: "acme-unrelated.txt",
+            fileName: "acme-random.png",
             destinations: destinations,
             rules: [],
             learning: singleExtensionExample
