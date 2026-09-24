@@ -41,19 +41,22 @@ public struct LearningRecord: Codable, Equatable, Identifiable {
     public var tokens: Set<String>
     public var destinationID: String
     public var updatedAt: Date
+    public var sampleName: String?
 
     public init(
         id: UUID = UUID(),
         fileExtension: String,
         tokens: Set<String>,
         destinationID: String,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        sampleName: String? = nil
     ) {
         self.id = id
         self.fileExtension = fileExtension.lowercased()
         self.tokens = Set(tokens.map { $0.lowercased() })
         self.destinationID = destinationID
         self.updatedAt = updatedAt
+        self.sampleName = sampleName
     }
 }
 
@@ -115,12 +118,13 @@ public enum SuggestionEngine {
         let examplesByDestination = Dictionary(grouping: learning.filter { record in
             availableIDs.contains(record.destinationID)
                 && !lockedDestinationIDs.contains(record.destinationID)
+                && record.sampleName != nil
                 && !extensionName.isEmpty
                 && record.fileExtension == extensionName
                 && !tokens.isDisjoint(with: meaningfulTokens(record.tokens))
         }, by: \.destinationID)
         let repeatedPatterns = examplesByDestination.compactMap { destinationID, examples -> (String, Int)? in
-            let distinctExamples = Set(examples.map { $0.tokens.sorted().joined(separator: "|") })
+            let distinctExamples = Set(examples.compactMap { $0.sampleName?.lowercased() })
             guard distinctExamples.count >= 3 else { return nil }
             return (destinationID, distinctExamples.count)
         }

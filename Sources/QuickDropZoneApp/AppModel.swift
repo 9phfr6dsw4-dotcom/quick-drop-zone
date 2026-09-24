@@ -445,8 +445,10 @@ final class AppModel: ObservableObject {
     private func remember(file: URL, destinationID: String) {
         let ext = file.pathExtension.lowercased()
         let tokens = SuggestionEngine.filenameTokens(file.lastPathComponent)
-        let entry = LearningRecord(fileExtension: ext, tokens: tokens, destinationID: destinationID)
-        learning.removeAll { $0.fileExtension == ext && $0.destinationID == destinationID && $0.tokens == tokens }
+        let entry = LearningRecord(fileExtension: ext, tokens: tokens, destinationID: destinationID, sampleName: file.lastPathComponent)
+        learning.removeAll {
+            $0.fileExtension == ext && $0.destinationID == destinationID && $0.sampleName == file.lastPathComponent
+        }
         learning.insert(entry, at: 0)
         if learning.count > 300 { learning = Array(learning.prefix(300)) }
         persist(learning, key: learningKey)

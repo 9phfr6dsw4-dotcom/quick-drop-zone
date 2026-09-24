@@ -26,9 +26,9 @@ final class SuggestionAndPolicyTests: XCTestCase {
     func testLearningUsesExtensionAndFilenameTokens() {
         let destinations = [Destination(id: "taxes", name: "Taxes")]
         let learning = [
-            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "jan"], destinationID: "taxes"),
-            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "feb"], destinationID: "taxes"),
-            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "mar"], destinationID: "taxes")
+            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "jan"], destinationID: "taxes", sampleName: "Acme invoice Jan.pdf"),
+            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "feb"], destinationID: "taxes", sampleName: "Acme invoice Feb.pdf"),
+            LearningRecord(fileExtension: "pdf", tokens: ["acme", "invoice", "mar"], destinationID: "taxes", sampleName: "Acme invoice Mar.pdf")
         ]
 
         let suggestion = SuggestionEngine.suggest(
@@ -43,11 +43,11 @@ final class SuggestionAndPolicyTests: XCTestCase {
     }
 
     func testLearningCountsDistinctMovedFilenamesEvenWhenTheirSubjectTokensMatch() {
-        let destination = [Destination(id: "bills", name: "Bills")]
+        let destination = [Destination(id: "clients", name: "Client Records")]
         let examples = [
-            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "bills", sampleName: "Acme invoice Jan.pdf"),
-            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "bills", sampleName: "Acme invoice Feb.pdf"),
-            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "bills", sampleName: "Acme invoice Mar.pdf")
+            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "clients", sampleName: "Acme invoice Jan.pdf"),
+            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "clients", sampleName: "Acme invoice Feb.pdf"),
+            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "clients", sampleName: "Acme invoice Mar.pdf")
         ]
 
         let twoExamples = SuggestionEngine.suggest(
@@ -64,7 +64,7 @@ final class SuggestionAndPolicyTests: XCTestCase {
         )
 
         XCTAssertNil(twoExamples)
-        XCTAssertEqual(threeExamples?.destinationID, "bills")
+        XCTAssertEqual(threeExamples?.destinationID, "clients")
         XCTAssertTrue(threeExamples?.reason.contains("3 examples") == true)
     }
 
