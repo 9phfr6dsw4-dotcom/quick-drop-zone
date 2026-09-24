@@ -56,4 +56,40 @@ final class FileMoveTests: XCTestCase {
         XCTAssertThrowsError(try mover.undo(receipt))
         XCTAssertEqual(try String(contentsOf: original, encoding: .utf8), "replacement")
     }
+
+    func testUndoBatchRestoresFilesAndRemovesCreatedFolderWhenEmpty() throws {
+        let box = try makeSandbox()
+        let cleanup = box.source
+        let newFolder = cleanup.appendingPathComponent("Acme", isDirectory: true)
+        try FileManager.default.createDirectory(at: newFolder, withIntermediateDirectories: false)
+        let first = cleanup.appendingPathComponent("Acme invoice.pdf")
+        let second = cleanup.appendingPathComponent("Acme contract.docx")
+        try Data("invoice".utf8).write(to: first)
+        try Data("contract".utf8).write(to: second)
+
+        let mover = FileMoveService()
+        let receipts = [try mover.move(first, to: newFolder), try mover.move(second, to: newFolder)]
+        let batch = MoveBatchReceipt(moves: receipts, createdFolders: [newFolder])
+        try mover.undo(batch)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: newFolder.path))
+    }
+
+    func testUndoBatchKeepsCreatedFolderIfItIsNotEmpty() throws {
+        let box = try makeSandbox()
+        let newFolder = box.source.appendingPathComponent("Acme", isDirectory: true)
+        try FileManager.default.createDirectory(at: newFolder, withIntermediateDirectories: false)
+        let original = box.source.appendingPathComponent("Acme invoice.pdf")
+        try Data("invoice".utf8).write(to: original)
+        let mover = FileMoveService()
+        let receipt = try mover.move(original, to: newFolder)
+        try Data("not ours".utf8).write(to: newFolder.appendingPathComponent("keep.txt"))
+
+        try mover.undo(MoveBatchReceipt(moves: [receipt], createdFolders: [newFolder]))
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: original.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: newFolder.appendingPathComponent("keep.txt").path))
+    }
 }
