@@ -192,6 +192,10 @@ final class SuggestionAndPolicyTests: XCTestCase {
         let unrelated = [
             root.appendingPathComponent("Northstar brief.pdf"),
             root.appendingPathComponent("Contoso proposal.pdf"),
+            root.appendingPathComponent("Northstar annual report.pdf"),
+            root.appendingPathComponent("Contoso tax report.docx"),
+            root.appendingPathComponent("Project plan.pdf"),
+            root.appendingPathComponent("Project notes.docx"),
             root.appendingPathComponent("Screenshot 1.png"),
             root.appendingPathComponent("Screen Shot 2.png")
         ]
