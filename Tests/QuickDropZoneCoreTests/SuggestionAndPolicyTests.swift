@@ -250,7 +250,7 @@ final class SuggestionAndPolicyTests: XCTestCase {
         ]
         for url in related + unrelated { try Data().write(to: url) }
 
-        let groups = FolderGrouping.suggest(for: related + unrelated, minimumGroupSize: 3)
+        let groups = FolderGrouping.suggest(for: related + unrelated, minimumGroupSize: 2)
         XCTAssertEqual(groups.map(\.name), ["Acme", "Contoso", "Northstar"])
         XCTAssertEqual(groups.first?.files.count, 3)
         XCTAssertTrue(groups[0].files.allSatisfy { related.contains($0) })
