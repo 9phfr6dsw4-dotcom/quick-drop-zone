@@ -48,6 +48,46 @@ final class SuggestionAndPolicyTests: XCTestCase {
         XCTAssertEqual(suggestion?.destinationID, "d1")
     }
 
+    func testPNGOnlyScreenshotRuleDoesNotLeakToOtherImageTypes() {
+        let destinations = [Destination(id: "screenshots", name: "Screenshots")]
+        let rule = DestinationRule(name: "PNG screenshots", extensions: ["png"], keywords: ["screenshot"], destinationID: "screenshots")
+
+        for fileName in ["Screenshot 01.jpg", "Screenshot 02.heic", "Screenshot 03.webp"] {
+            let suggestion = SuggestionEngine.suggest(fileName: fileName, destinations: destinations, rules: [rule], learning: [])
+            XCTAssertNil(suggestion, "A PNG-only Screenshots rule must not suggest \(fileName)")
+        }
+    }
+
+    func testNonScreenshotPNGDoesNotMatchScreenshotsFolderByTypeAlone() {
+        let suggestion = SuggestionEngine.suggest(
+            fileName: "product-photo.png",
+            destinations: [Destination(id: "screenshots", name: "Screenshots")],
+            rules: [],
+            learning: []
+        )
+        XCTAssertNil(suggestion)
+    }
+
+    func testOneLearnedExtensionOrSharedTokenIsNotAConfidentSuggestion() {
+        let destinations = [Destination(id: "screenshots", name: "Screenshots")]
+        let singleExtensionExample = [LearningRecord(fileExtension: "png", tokens: ["invoice", "acme"], destinationID: "screenshots")]
+        let extensionOnly = SuggestionEngine.suggest(
+            fileName: "random-photo.png",
+            destinations: destinations,
+            rules: [],
+            learning: singleExtensionExample
+        )
+        XCTAssertNil(extensionOnly)
+
+        let tokenOnly = SuggestionEngine.suggest(
+            fileName: "acme-unrelated.txt",
+            destinations: destinations,
+            rules: [],
+            learning: singleExtensionExample
+        )
+        XCTAssertNil(tokenOnly)
+    }
+
     func testTrashPolicyOnlyAllowsInstalledAppDiskImagesDirectlyInDownloads() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let downloads = root.appendingPathComponent("Downloads", isDirectory: true)
