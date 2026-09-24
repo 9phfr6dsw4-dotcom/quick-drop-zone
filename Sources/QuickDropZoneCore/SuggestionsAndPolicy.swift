@@ -51,7 +51,7 @@ public struct LearningRecord: Codable, Equatable, Identifiable {
     ) {
         self.id = id
         self.fileExtension = fileExtension.lowercased()
-        self.tokens = Set(tokens.map(\.lowercased))
+        self.tokens = Set(tokens.map { $0.lowercased() })
         self.destinationID = destinationID
         self.updatedAt = updatedAt
     }
@@ -90,20 +90,21 @@ public enum SuggestionEngine {
             return DestinationSuggestion(destinationID: rule.destinationID, reason: "Matched rule: \(rule.name)")
         }
 
-        let learnedMatch = learning
-            .filter { availableIDs.contains($0.destinationID) }
-            .map { record -> (LearningRecord, Int) in
-                let extensionScore = !extensionName.isEmpty && record.fileExtension == extensionName ? 1 : 0
-                let tokenScore = tokens.intersection(record.tokens).count * 2
-                return (record, extensionScore + tokenScore)
-            }
-            .filter { $0.1 > 0 }
+        let scoredLearning: [(record: LearningRecord, score: Int)] = learning.compactMap { record in
+            guard availableIDs.contains(record.destinationID) else { return nil }
+            let extensionScore: Int = (!extensionName.isEmpty && record.fileExtension == extensionName) ? 1 : 0
+            let overlapCount = tokens.intersection(record.tokens).count
+            let score = extensionScore + (overlapCount * 2)
+            return (record: record, score: score)
+        }
+        let learnedMatch = scoredLearning
+            .filter { $0.score > 0 }
             .sorted { lhs, rhs in
-                lhs.1 == rhs.1 ? lhs.0.updatedAt > rhs.0.updatedAt : lhs.1 > rhs.1
+                lhs.score == rhs.score ? lhs.record.updatedAt > rhs.record.updatedAt : lhs.score > rhs.score
             }
             .first
         if let learnedMatch {
-            return DestinationSuggestion(destinationID: learnedMatch.0.destinationID, reason: "Based on similar files you organized")
+            return DestinationSuggestion(destinationID: learnedMatch.record.destinationID, reason: "Based on similar files you organized")
         }
 
         return builtInSuggestion(fileName: fileName, extensionName: extensionName, tokens: tokens, destinations: destinations)
