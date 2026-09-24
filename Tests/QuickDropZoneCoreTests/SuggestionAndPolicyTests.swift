@@ -181,6 +181,55 @@ final class SuggestionAndPolicyTests: XCTestCase {
         try FileManager.default.removeItem(at: root)
     }
 
+    func testFolderGroupingDefaultsToFourClearlyRelatedFiles() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let threeRelated = [
+            root.appendingPathComponent("Acme invoice Jan.pdf"),
+            root.appendingPathComponent("Acme invoice Feb.pdf"),
+            root.appendingPathComponent("Acme invoice Mar.pdf")
+        ]
+        let fourRelated = threeRelated + [root.appendingPathComponent("Acme invoice Apr.pdf")]
+        for url in fourRelated { try Data().write(to: url) }
+
+        XCTAssertTrue(FolderGrouping.suggest(for: threeRelated).isEmpty)
+        XCTAssertEqual(FolderGrouping.suggest(for: fourRelated).first?.files.count, 4)
+    }
+
+    func testFolderGroupingHonorsConfiguredMinimum() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let files = [
+            root.appendingPathComponent("Acme invoice Jan.pdf"),
+            root.appendingPathComponent("Acme invoice Feb.pdf"),
+            root.appendingPathComponent("Acme invoice Mar.pdf")
+        ]
+        for url in files { try Data().write(to: url) }
+
+        XCTAssertEqual(FolderGrouping.suggest(for: files, minimumGroupSize: 3).first?.files.count, 3)
+        XCTAssertTrue(FolderGrouping.suggest(for: files, minimumGroupSize: 4).isEmpty)
+    }
+
+    func testFolderGroupingSettingDefaultsPersistsAndClamps() {
+        let suiteName = "QuickDropZoneTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let setting = FolderGroupingSettings(defaults: defaults, key: "minimum-related-files")
+        XCTAssertEqual(setting.minimumRelatedFiles, 4)
+
+        setting.minimumRelatedFiles = 6
+        XCTAssertEqual(FolderGroupingSettings(defaults: defaults, key: "minimum-related-files").minimumRelatedFiles, 6)
+
+        setting.minimumRelatedFiles = 1
+        XCTAssertEqual(setting.minimumRelatedFiles, 2)
+        setting.minimumRelatedFiles = 101
+        XCTAssertEqual(setting.minimumRelatedFiles, 100)
+    }
+
     func testFolderGroupingRequiresSharedMeaningfulSubjectNotTypeOrDate() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -201,7 +250,7 @@ final class SuggestionAndPolicyTests: XCTestCase {
         ]
         for url in related + unrelated { try Data().write(to: url) }
 
-        let groups = FolderGrouping.suggest(for: related + unrelated)
+        let groups = FolderGrouping.suggest(for: related + unrelated, minimumGroupSize: 3)
         XCTAssertEqual(groups.map(\.name), ["Acme", "Contoso", "Northstar"])
         XCTAssertEqual(groups.first?.files.count, 3)
         XCTAssertTrue(groups[0].files.allSatisfy { related.contains($0) })
