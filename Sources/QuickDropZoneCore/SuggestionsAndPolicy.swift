@@ -255,25 +255,30 @@ public enum FolderGrouping {
 
         var usedFiles = Set<URL>()
         let minimum = max(2, minimumGroupSize)
-        return filesBySubject
-            .map { (subject: $0.key, files: Array(Set($0.value))) }
-            .sorted { lhs, rhs in
-                lhs.files.count == rhs.files.count ? lhs.subject < rhs.subject : lhs.files.count > rhs.files.count
+        var candidates: [(subject: String, files: [URL])] = []
+        for (subject, subjectFiles) in filesBySubject {
+            candidates.append((subject: subject, files: Array(Set(subjectFiles))))
+        }
+        candidates.sort { lhs, rhs in
+            if lhs.files.count == rhs.files.count { return lhs.subject < rhs.subject }
+            return lhs.files.count > rhs.files.count
+        }
+
+        var groups: [FolderGroup] = []
+        for candidate in candidates {
+            let remaining = candidate.files.filter { !usedFiles.contains($0) }
+            guard remaining.count >= minimum else { continue }
+            for file in remaining { usedFiles.insert(file) }
+
+            let firstCharacter = String(candidate.subject.prefix(1)).uppercased()
+            let remainingCharacters = String(candidate.subject.dropFirst())
+            let displayName = firstCharacter + remainingCharacters
+            let reason = "These \(remaining.count) files share the subject “\(displayName)” in their filenames."
+            let sortedFiles = remaining.sorted {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
             }
-            .compactMap { candidate -> FolderGroup? in
-                let remaining = candidate.files.filter { !usedFiles.contains($0) }
-                guard remaining.count >= minimum else { return nil }
-                remaining.forEach { usedFiles.insert($0) }
-                let firstCharacter = String(candidate.subject.prefix(1)).uppercased()
-                let remainingCharacters = String(candidate.subject.dropFirst())
-                let displayName = firstCharacter + remainingCharacters
-                let reason = "These \(remaining.count) files share the subject “\(displayName)” in their filenames."
-                return FolderGroup(
-                    id: candidate.subject,
-                    name: displayName,
-                    reason: reason,
-                    files: remaining.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-                )
-            }
+            groups.append(FolderGroup(id: candidate.subject, name: displayName, reason: reason, files: sortedFiles))
+        }
+        return groups
     }
 }
