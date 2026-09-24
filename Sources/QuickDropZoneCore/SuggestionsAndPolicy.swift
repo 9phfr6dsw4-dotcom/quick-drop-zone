@@ -264,7 +264,9 @@ public enum FolderGrouping {
                 let remaining = candidate.files.filter { !usedFiles.contains($0) }
                 guard remaining.count >= minimum else { return nil }
                 remaining.forEach { usedFiles.insert($0) }
-                let displayName = candidate.subject.prefix(1).uppercased() + candidate.subject.dropFirst()
+                let firstCharacter = String(candidate.subject.prefix(1)).uppercased()
+                let remainingCharacters = String(candidate.subject.dropFirst())
+                let displayName = firstCharacter + remainingCharacters
                 let reason = "These \(remaining.count) files share the subject “\(displayName)” in their filenames."
                 return FolderGroup(
                     id: candidate.subject,
