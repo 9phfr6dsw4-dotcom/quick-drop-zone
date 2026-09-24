@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-and-test:
-    name: Test on macOS 26 / latest stable Xcode
+    name: Test and package on macOS 26
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -23,5 +23,19 @@ jobs:
           echo "macOS SDK: $sdk_version"
           sdk_major="${sdk_version%%.*}"
           test "$sdk_major" -ge 26
-      - name: Run tests
+      - name: Run automated core tests
         run: swift test
+      - name: Build, package, and verify app bundle and ZIP
+        run: bash Scripts/package-app.sh
+      - name: Launch app smoke test
+        run: bash Scripts/smoke-test.sh
+      - name: Upload finished app ZIP
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Quick-Drop-Zone-${{ github.run_number }}
+          path: |
+            dist/Quick-Drop-Zone-1.0.0.zip
+            dist/Quick-Drop-Zone-1.0.0.zip.sha256
+          if-no-files-found: error
+          retention-days: 30

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct FileMoveReceipt: Equatable {
+public struct FileMoveReceipt: Codable, Equatable {
     public let originalURL: URL
     public let movedURL: URL
 
