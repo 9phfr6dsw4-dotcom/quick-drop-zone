@@ -132,11 +132,11 @@ public enum SuggestionEngine {
         }
 
         return builtInSuggestion(
-            fileName: fileName,
             extensionName: extensionName,
             tokens: exactTokens,
             destinations: destinations.filter { !lockedDestinationIDs.contains($0.id) },
-            isScreenshot: isScreenshot
+            isScreenshot: isScreenshot,
+            isFilenameScreenshot: isFilenameScreenshot
         )
     }
 
@@ -163,11 +163,11 @@ public enum SuggestionEngine {
     }
 
     private static func builtInSuggestion(
-        fileName: String,
         extensionName: String,
         tokens: Set<String>,
         destinations: [Destination],
-        isScreenshot: Bool
+        isScreenshot: Bool,
+        isFilenameScreenshot: Bool
     ) -> DestinationSuggestion? {
         if isScreenshot,
            let destination = destinations.first(where: { words(in: $0.name).contains("screenshots") || words(in: $0.name).contains("screenshot") }) {
