@@ -31,7 +31,16 @@ bash Scripts/package-app.sh
 bash Scripts/smoke-test.sh
 ```
 
-GitHub Actions uses the standard `macos-26` runner, checks the installed Xcode and SDK, runs the core tests, packages a `.app`, verifies the executable after extracting the exact ZIP, and smoke-launches the app. The downloadable ZIP is uploaded as a run artifact.
+GitHub Actions uses the standard `macos-26` runner, checks the installed Xcode and SDK, runs the core tests, packages a `.app`, verifies the executable after extracting the exact ZIP, and smoke-launches the app. The downloadable ZIP and SHA-256 sidecar are uploaded as a run artifact.
+
+### Maintainer release workflow
+
+1. Push the tested source and wait for the matching macOS CI run to pass. Review the run logs; do not treat a compile or upload step alone as verification.
+2. Download the ZIP and checksum sidecar from that successful run. Verify the checksum and ZIP integrity, then inspect the extracted `.app` and executable. Do not rebuild or repackage after this check.
+3. Create a versioned GitHub Release and attach those exact two CI files. Read the release back, download the public ZIP, and confirm its checksum matches the CI artifact.
+4. Give users the direct ZIP download link and simple unzip/Applications/first-open instructions. Say plainly that the ad-hoc-signed app is not notarized.
+
+Never put user files, file names, private preferences, credentials, or signing material in the public repository, test fixtures, CI logs, or artifacts. GitHub hosts source and the app distribution only; app file operations and user data remain on the Mac.
 
 ## Privacy
 
