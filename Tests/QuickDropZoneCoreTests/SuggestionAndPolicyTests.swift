@@ -42,6 +42,32 @@ final class SuggestionAndPolicyTests: XCTestCase {
         XCTAssertTrue(suggestion?.reason.localizedCaseInsensitiveContains("similar") == true)
     }
 
+    func testLearningCountsDistinctMovedFilenamesEvenWhenTheirSubjectTokensMatch() {
+        let destination = [Destination(id: "bills", name: "Bills")]
+        let examples = [
+            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "bills", sampleName: "Acme invoice Jan.pdf"),
+            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "bills", sampleName: "Acme invoice Feb.pdf"),
+            LearningRecord(fileExtension: "pdf", tokens: ["acme"], destinationID: "bills", sampleName: "Acme invoice Mar.pdf")
+        ]
+
+        let twoExamples = SuggestionEngine.suggest(
+            fileName: "Acme invoice Apr.pdf",
+            destinations: destination,
+            rules: [],
+            learning: Array(examples.prefix(2))
+        )
+        let threeExamples = SuggestionEngine.suggest(
+            fileName: "Acme invoice Apr.pdf",
+            destinations: destination,
+            rules: [],
+            learning: examples
+        )
+
+        XCTAssertNil(twoExamples)
+        XCTAssertEqual(threeExamples?.destinationID, "bills")
+        XCTAssertTrue(threeExamples?.reason.contains("3 examples") == true)
+    }
+
     func testFilenameScreenshotFallbackIsLimitedToPNG() {
         let destination = [Destination(id: "screenshots", name: "Screenshots")]
         for fileName in ["Screenshot 01.jpg", "Screen Shot 02.heic", "Screenshot 03.pdf"] {
