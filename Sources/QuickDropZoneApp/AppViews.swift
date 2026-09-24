@@ -1,4 +1,5 @@
 import AppKit
+import QuickDropZoneCore
 import SwiftUI
 import UniformTypeIdentifiers
 
