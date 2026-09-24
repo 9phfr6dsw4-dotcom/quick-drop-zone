@@ -47,6 +47,22 @@ final class SuggestionAndPolicyTests: XCTestCase {
         for fileName in ["Screenshot 01.jpg", "Screen Shot 02.heic", "Screenshot 03.pdf"] {
             XCTAssertNil(SuggestionEngine.suggest(fileName: fileName, destinations: destination, rules: [], learning: []))
         }
+        XCTAssertEqual(
+            SuggestionEngine.suggest(fileName: "Screenshot 04.png", destinations: destination, rules: [], learning: [])?.destinationID,
+            "screenshots"
+        )
+    }
+
+    func testMetadataFlagIdentifiesScreenshotImageWithoutScreenshotFilename() {
+        let suggestion = SuggestionEngine.suggest(
+            fileName: "capture-2026-04-01.jpg",
+            destinations: [Destination(id: "screenshots", name: "Screenshots")],
+            rules: [],
+            learning: [],
+            isScreenCapture: true
+        )
+        XCTAssertEqual(suggestion?.destinationID, "screenshots")
+        XCTAssertEqual(suggestion?.reason, "macOS marks this as a screen capture")
     }
 
     func testMacScreenshotMetadataMatchesPNGRuleEvenWithoutScreenshotName() {
@@ -77,19 +93,22 @@ final class SuggestionAndPolicyTests: XCTestCase {
         let rule = DestinationRule(name: "PNG screenshots", extensions: ["png"], keywords: ["screenshot"], destinationID: "screenshots")
 
         for fileName in ["Screenshot 01.jpg", "Screenshot 02.heic", "Screenshot 03.webp"] {
-            let suggestion = SuggestionEngine.suggest(fileName: fileName, destinations: destinations, rules: [rule], learning: [])
+            let suggestion = SuggestionEngine.suggest(
+                fileName: fileName,
+                destinations: destinations,
+                rules: [rule],
+                learning: [],
+                isScreenCapture: true
+            )
             XCTAssertNil(suggestion, "A PNG-only Screenshots rule must not suggest \(fileName)")
         }
     }
 
     func testNonScreenshotPNGDoesNotMatchScreenshotsFolderByTypeAlone() {
-        let suggestion = SuggestionEngine.suggest(
-            fileName: "product-photo.png",
-            destinations: [Destination(id: "screenshots", name: "Screenshots")],
-            rules: [],
-            learning: []
-        )
-        XCTAssertNil(suggestion)
+        let destinations = [Destination(id: "screenshots", name: "Screenshots")]
+        for fileName in ["product-photo.png", "tax-return.pdf", "archive.zip", "vacation.jpg"] {
+            XCTAssertNil(SuggestionEngine.suggest(fileName: fileName, destinations: destinations, rules: [], learning: []))
+        }
     }
 
     func testOneLearnedExtensionOrSharedTokenIsNotAConfidentSuggestion() {
@@ -156,6 +175,10 @@ final class SuggestionAndPolicyTests: XCTestCase {
         XCTAssertEqual(groups.map(\.name), ["Acme"])
         XCTAssertEqual(groups.first?.files.count, 3)
         XCTAssertTrue(groups.allSatisfy { $0.files.allSatisfy { related.contains($0) } })
+        XCTAssertTrue(groups[0].reason.contains("Acme"))
+        var editable = groups[0]
+        editable.name = "Acme invoices"
+        XCTAssertEqual(editable.name, "Acme invoices")
 
         try FileManager.default.removeItem(at: root)
     }

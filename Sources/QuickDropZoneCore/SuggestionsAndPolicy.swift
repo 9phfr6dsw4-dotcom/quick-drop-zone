@@ -231,40 +231,47 @@ public struct TrashPolicy {
 }
 
 public struct FolderGroup: Equatable, Identifiable {
-    public var id: String { name }
-    public let name: String
+    public let id: String
+    public var name: String
+    public let reason: String
     public let files: [URL]
 
-    public init(name: String, files: [URL]) {
+    public init(id: String, name: String, reason: String, files: [URL]) {
+        self.id = id
         self.name = name
+        self.reason = reason
         self.files = files
     }
 }
 
 public enum FolderGrouping {
     public static func suggest(for files: [URL], minimumGroupSize: Int = 2) -> [FolderGroup] {
-        var groups: [String: [URL]] = [:]
+        var filesBySubject: [String: [URL]] = [:]
         for file in files {
-            let values = try? file.resourceValues(forKeys: [.contentModificationDateKey])
-            let date = values?.contentModificationDate ?? .distantPast
-            let year = Calendar.current.component(.year, from: date)
-            let name = suggestedName(for: file, year: year)
-            groups[name, default: []].append(file)
+            for subject in SuggestionEngine.filenameTokens(file.lastPathComponent) {
+                filesBySubject[subject, default: []].append(file)
+            }
         }
-        return groups
-            .filter { $0.value.count >= max(2, minimumGroupSize) }
-            .map { FolderGroup(name: $0.key, files: $0.value.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }) }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
 
-    private static func suggestedName(for file: URL, year: Int) -> String {
-        let filename = file.lastPathComponent.lowercased()
-        let ext = file.pathExtension.lowercased()
-        if filename.contains("screenshot") || filename.contains("screen shot") { return "Screenshots" }
-        if ext == "pdf" { return "PDFs \(year)" }
-        if ["png", "jpg", "jpeg", "heic", "webp"].contains(ext) { return "Images \(year)" }
-        if ext == "doc" || ext == "docx" { return "Documents \(year)" }
-        guard !ext.isEmpty else { return "Other Files \(year)" }
-        return "\(ext.uppercased()) Files \(year)"
+        var usedFiles = Set<URL>()
+        let minimum = max(2, minimumGroupSize)
+        return filesBySubject
+            .map { (subject: $0.key, files: Array(Set($0.value))) }
+            .sorted { lhs, rhs in
+                lhs.files.count == rhs.files.count ? lhs.subject < rhs.subject : lhs.files.count > rhs.files.count
+            }
+            .compactMap { candidate -> FolderGroup? in
+                let remaining = candidate.files.filter { !usedFiles.contains($0) }
+                guard remaining.count >= minimum else { return nil }
+                remaining.forEach { usedFiles.insert($0) }
+                let displayName = candidate.subject.prefix(1).uppercased() + candidate.subject.dropFirst()
+                let reason = "These \(remaining.count) files share the subject “\(displayName)” in their filenames."
+                return FolderGroup(
+                    id: candidate.subject,
+                    name: displayName,
+                    reason: reason,
+                    files: remaining.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+                )
+            }
     }
 }

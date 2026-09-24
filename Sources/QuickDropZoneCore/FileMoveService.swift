@@ -10,6 +10,17 @@ public struct FileMoveReceipt: Codable, Equatable {
     }
 }
 
+public struct MoveBatchReceipt: Codable, Equatable {
+    public let moves: [FileMoveReceipt]
+    /// Contains only folders Quick Drop Zone itself created for this approved batch.
+    public let createdFolders: [URL]
+
+    public init(moves: [FileMoveReceipt], createdFolders: [URL] = []) {
+        self.moves = moves
+        self.createdFolders = createdFolders
+    }
+}
+
 public enum FileMoveError: Error, Equatable {
     case sourceDoesNotExist
     case sourceIsDirectory
@@ -65,6 +76,17 @@ public struct FileMoveService {
             throw FileMoveError.originalPathOccupied
         }
         try fileManager.moveItem(at: receipt.movedURL, to: receipt.originalURL)
+    }
+
+    public func undo(_ receipt: MoveBatchReceipt) throws {
+        for moveReceipt in receipt.moves.reversed() {
+            try undo(moveReceipt)
+        }
+        for folderURL in receipt.createdFolders.reversed() where fileManager.fileExists(atPath: folderURL.path) {
+            let contents = try fileManager.contentsOfDirectory(atPath: folderURL.path)
+            guard contents.isEmpty else { continue }
+            try fileManager.removeItem(at: folderURL)
+        }
     }
 
     private func uniqueDestination(for sourceURL: URL, in folderURL: URL) -> URL {

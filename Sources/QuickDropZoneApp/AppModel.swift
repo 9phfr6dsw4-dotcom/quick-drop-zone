@@ -35,7 +35,7 @@ final class AppModel: ObservableObject {
     @Published var pendingURL: URL?
     @Published var pendingSuggestionID: String?
     @Published var pendingSuggestionReason: String?
-    @Published var lastMove: FileMoveReceipt?
+    @Published var lastMove: MoveBatchReceipt?
     @Published var statusMessage: String?
     @Published var userError: String?
 
@@ -43,8 +43,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var cleanupRows: [CleanupEntry] = []
     @Published private(set) var trashRows: [TrashEntry] = []
     @Published private(set) var folderGroups: [FolderGroup] = []
-    @Published var selectedGroupNames: Set<String> = []
-    @Published var newFolderParentID: String?
+    @Published var selectedGroupIDs: Set<String> = []
 
     private let defaults: UserDefaults
     private let fileManager = FileManager.default
@@ -61,7 +60,8 @@ final class AppModel: ObservableObject {
         favoriteFolders = Self.decode([FavoriteFolder].self, key: foldersKey, defaults: defaults) ?? []
         rules = Self.decode([DestinationRule].self, key: rulesKey, defaults: defaults) ?? []
         learning = Self.decode([LearningRecord].self, key: learningKey, defaults: defaults) ?? []
-        lastMove = Self.decode(FileMoveReceipt.self, key: lastMoveKey, defaults: defaults)
+        lastMove = Self.decode(MoveBatchReceipt.self, key: lastMoveKey, defaults: defaults)
+            ?? Self.decode(FileMoveReceipt.self, key: lastMoveKey, defaults: defaults).map { MoveBatchReceipt(moves: [$0]) }
     }
 
     var destinations: [Destination] {
@@ -74,7 +74,7 @@ final class AppModel: ObservableObject {
 
     var selectedMoveCount: Int {
         cleanupRows.filter { $0.isSelected && $0.destinationID != nil }.count
-            + folderGroups.filter { selectedGroupNames.contains($0.name) }.reduce(0) { $0 + $1.files.count }
+            + folderGroups.filter { selectedGroupIDs.contains($0.id) && validFolderName($0.name) != nil }.reduce(0) { $0 + $1.files.count }
     }
 
     var selectedTrashCount: Int {
@@ -104,7 +104,6 @@ final class AppModel: ObservableObject {
             }
             favoriteFolders.append(FavoriteFolder(id: UUID().uuidString, name: url.lastPathComponent, bookmarkData: bookmark))
             persist(favoriteFolders, key: foldersKey)
-            newFolderParentID = newFolderParentID ?? favoriteFolders.first?.id
             statusMessage = "Added \(url.lastPathComponent)."
         } catch {
             userError = "Could not save that folder bookmark: \(error.localizedDescription)"
@@ -115,7 +114,6 @@ final class AppModel: ObservableObject {
         favoriteFolders.removeAll { $0.id == id }
         rules.removeAll { $0.destinationID == id }
         learning.removeAll { $0.destinationID == id }
-        if newFolderParentID == id { newFolderParentID = favoriteFolders.first?.id }
         persist(favoriteFolders, key: foldersKey)
         persist(rules, key: rulesKey)
         persist(learning, key: learningKey)
@@ -159,23 +157,14 @@ final class AppModel: ObservableObject {
             fileName: url.lastPathComponent,
             destinations: destinations,
             rules: rules,
-            learning: learning
+            learning: learning,
+            isScreenCapture: ScreenshotMetadata.isScreenCapture(at: url)
         )
         if let localSuggestion {
             pendingSuggestionID = localSuggestion.destinationID
             pendingSuggestionReason = localSuggestion.reason
-            return
-        }
-
-        let availableDestinations = destinations
-        Task { [weak self] in
-            guard let self else { return }
-            let advice = await FoundationModelAdvisor.suggest(fileName: url.lastPathComponent, destinations: availableDestinations)
-            guard self.pendingURL?.standardizedFileURL == url.standardizedFileURL,
-                  let advice,
-                  self.favoriteFolders.contains(where: { $0.id == advice.destinationID }) else { return }
-            self.pendingSuggestionID = advice.destinationID
-            self.pendingSuggestionReason = advice.reason
+        } else {
+            statusMessage = "No confident match — choose a folder manually."
         }
     }
 
@@ -192,7 +181,7 @@ final class AppModel: ObservableObject {
         }
         do {
             let receipt = try move(source, into: destination)
-            saveLastMove(receipt)
+            saveLastMove(MoveBatchReceipt(moves: [receipt]))
             remember(file: source, destinationID: destinationID)
             statusMessage = "Moved to \(destinationName(for: destinationID) ?? destination.lastPathComponent)."
             cancelPendingDrop()
@@ -246,18 +235,26 @@ final class AppModel: ObservableObject {
         trashRows[index].isSelected = selected
     }
 
-    func setFolderGroupSelected(name: String, selected: Bool) {
-        if selected { selectedGroupNames.insert(name) } else { selectedGroupNames.remove(name) }
+    func setFolderGroupSelected(id: String, selected: Bool) {
+        if selected { selectedGroupIDs.insert(id) } else { selectedGroupIDs.remove(id) }
+    }
+
+    func renameFolderGroup(id: String, to name: String) {
+        guard let index = folderGroups.firstIndex(where: { $0.id == id }) else { return }
+        folderGroups[index].name = name
     }
 
     func moveSelectedCleanupItems() {
         var movedCount = 0
+        var receipts: [FileMoveReceipt] = []
+        var createdFolders: [URL] = []
+
         for row in cleanupRows where row.isSelected {
             guard let destinationID = row.destinationID,
                   let destination = resolvedURL(for: destinationID) else { continue }
             do {
                 let receipt = try move(row.url, into: destination)
-                saveLastMove(receipt)
+                receipts.append(receipt)
                 remember(file: row.url, destinationID: destinationID)
                 movedCount += 1
             } catch {
@@ -265,29 +262,40 @@ final class AppModel: ObservableObject {
             }
         }
 
-        if !selectedGroupNames.isEmpty {
-            guard let parentID = newFolderParentID, let parent = resolvedURL(for: parentID) else {
-                userError = "Choose a favorite folder as the destination for new folders."
-                return
-            }
-            for group in folderGroups where selectedGroupNames.contains(group.name) {
+        if !selectedGroupIDs.isEmpty, let parent = cleanupFolder {
+            for group in folderGroups where selectedGroupIDs.contains(group.id) {
+                guard let safeName = validFolderName(group.name) else {
+                    userError = "Enter a valid name for the \(group.id) folder."
+                    continue
+                }
+                var createdFolderURL: URL?
+                var folderWasCreated = false
+                var groupReceipts: [FileMoveReceipt] = []
                 do {
-                    let parentScope = parent.startAccessingSecurityScopedResource()
-                    defer { if parentScope { parent.stopAccessingSecurityScopedResource() } }
-                    let newFolder = try createOrFindFolder(named: group.name, in: parent)
+                    let (newFolder, wasCreated) = try createOrFindFolder(named: safeName, in: parent)
+                    createdFolderURL = newFolder
+                    folderWasCreated = wasCreated
                     for file in group.files {
                         let receipt = try move(file, into: newFolder)
-                        saveLastMove(receipt)
-                        remember(file: file, destinationID: parentID)
+                        groupReceipts.append(receipt)
+                        receipts.append(receipt)
                         movedCount += 1
                     }
+                    if wasCreated && !groupReceipts.isEmpty { createdFolders.append(newFolder) }
                 } catch {
+                    if folderWasCreated, let createdFolderURL {
+                        if groupReceipts.isEmpty { removeFolderIfEmpty(createdFolderURL) }
+                        else { createdFolders.append(createdFolderURL) }
+                    }
                     userError = "Could not organize the \(group.name) group: \(error.localizedDescription)"
                 }
             }
         }
 
-        selectedGroupNames.removeAll()
+        if !receipts.isEmpty {
+            saveLastMove(MoveBatchReceipt(moves: receipts, createdFolders: createdFolders))
+        }
+        selectedGroupIDs.removeAll()
         if let cleanupFolder { beginCleanup(at: cleanupFolder) }
         statusMessage = movedCount == 0 ? "No files were moved." : "Moved \(movedCount) item(s)."
     }
@@ -295,6 +303,7 @@ final class AppModel: ObservableObject {
     /// The only app path that sends an item to Trash. The UI calls it only after an explicit, separate confirmation.
     func moveSelectedInstallersToTrash() {
         var trashedCount = 0
+        var receipts: [FileMoveReceipt] = []
         for entry in trashRows where entry.isSelected {
             var result: NSURL?
             let sourceScope = entry.url.startAccessingSecurityScopedResource()
@@ -302,12 +311,13 @@ final class AppModel: ObservableObject {
                 defer { if sourceScope { entry.url.stopAccessingSecurityScopedResource() } }
                 try fileManager.trashItem(at: entry.url, resultingItemURL: &result)
                 let movedURL = (result as URL?) ?? entry.url
-                saveLastMove(FileMoveReceipt(originalURL: entry.url, movedURL: movedURL))
+                receipts.append(FileMoveReceipt(originalURL: entry.url, movedURL: movedURL))
                 trashedCount += 1
             } catch {
                 userError = "Could not move \(entry.url.lastPathComponent) to Trash: \(error.localizedDescription)"
             }
         }
+        if !receipts.isEmpty { saveLastMove(MoveBatchReceipt(moves: receipts)) }
         if let cleanupFolder { beginCleanup(at: cleanupFolder) }
         statusMessage = trashedCount == 0 ? "No installers were moved to Trash." : "Moved \(trashedCount) installer(s) to Trash."
     }
@@ -327,10 +337,7 @@ final class AppModel: ObservableObject {
         cleanupRows = []
         trashRows = []
         folderGroups = []
-        selectedGroupNames = []
-        if newFolderParentID == nil || !favoriteFolders.contains(where: { $0.id == newFolderParentID }) {
-            newFolderParentID = favoriteFolders.first?.id
-        }
+        selectedGroupIDs = []
 
         do {
             let urls = try fileManager.contentsOfDirectory(
@@ -363,7 +370,8 @@ final class AppModel: ObservableObject {
                     fileName: url.lastPathComponent,
                     destinations: destinations,
                     rules: rules,
-                    learning: learning
+                    learning: learning,
+                    isScreenCapture: ScreenshotMetadata.isScreenCapture(at: url)
                 )
                 cleanupRows.append(CleanupEntry(
                     url: url,
@@ -383,7 +391,7 @@ final class AppModel: ObservableObject {
     private func refreshFolderGroups() {
         let unassignedFiles = cleanupRows.filter { $0.destinationID == nil }.map(\.url)
         folderGroups = FolderGrouping.suggest(for: unassignedFiles)
-        selectedGroupNames = selectedGroupNames.intersection(Set(folderGroups.map(\.name)))
+        selectedGroupIDs = selectedGroupIDs.intersection(Set(folderGroups.map(\.id)))
     }
 
     private func installedApplications(in folder: URL) -> [URL] {
@@ -397,11 +405,11 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func createOrFindFolder(named name: String, in parent: URL) throws -> URL {
+    private func createOrFindFolder(named name: String, in parent: URL) throws -> (URL, Bool) {
         var candidate = parent.appendingPathComponent(name, isDirectory: true)
         if fileManager.fileExists(atPath: candidate.path) {
             var isDirectory: ObjCBool = false
-            if fileManager.fileExists(atPath: candidate.path, isDirectory: &isDirectory), isDirectory.boolValue { return candidate }
+            if fileManager.fileExists(atPath: candidate.path, isDirectory: &isDirectory), isDirectory.boolValue { return (candidate, false) }
             var suffix = 2
             repeat {
                 candidate = parent.appendingPathComponent("\(name) \(suffix)", isDirectory: true)
@@ -409,7 +417,19 @@ final class AppModel: ObservableObject {
             } while fileManager.fileExists(atPath: candidate.path)
         }
         try fileManager.createDirectory(at: candidate, withIntermediateDirectories: false)
-        return candidate
+        return (candidate, true)
+    }
+
+    private func validFolderName(_ value: String) -> String? {
+        let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != ".", name != "..",
+              !name.contains("/"), !name.contains("\\"), !name.contains(":") else { return nil }
+        return name
+    }
+
+    private func removeFolderIfEmpty(_ url: URL) {
+        guard let contents = try? fileManager.contentsOfDirectory(atPath: url.path), contents.isEmpty else { return }
+        try? fileManager.removeItem(at: url)
     }
 
     private func move(_ source: URL, into destination: URL) throws -> FileMoveReceipt {
@@ -426,13 +446,13 @@ final class AppModel: ObservableObject {
         let ext = file.pathExtension.lowercased()
         let tokens = SuggestionEngine.filenameTokens(file.lastPathComponent)
         let entry = LearningRecord(fileExtension: ext, tokens: tokens, destinationID: destinationID)
-        learning.removeAll { $0.fileExtension == ext && $0.destinationID == destinationID && !$0.tokens.isDisjoint(with: tokens) }
+        learning.removeAll { $0.fileExtension == ext && $0.destinationID == destinationID && $0.tokens == tokens }
         learning.insert(entry, at: 0)
-        if learning.count > 150 { learning = Array(learning.prefix(150)) }
+        if learning.count > 300 { learning = Array(learning.prefix(300)) }
         persist(learning, key: learningKey)
     }
 
-    private func saveLastMove(_ receipt: FileMoveReceipt?) {
+    private func saveLastMove(_ receipt: MoveBatchReceipt?) {
         lastMove = receipt
         guard let receipt else {
             defaults.removeObject(forKey: lastMoveKey)

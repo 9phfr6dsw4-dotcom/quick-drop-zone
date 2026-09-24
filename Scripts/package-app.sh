@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 APP="dist/Quick Drop Zone.app"
 ICONSET="dist/AppIcon.iconset"
 VERIFY_DIR="dist/verify-extracted"
-ZIP="dist/Quick-Drop-Zone-1.0.0.zip"
+ZIP="dist/Quick-Drop-Zone-1.1.0.zip"
 
 swift build -c release --product QuickDropZone
 rm -rf "$APP" "$ICONSET" "$VERIFY_DIR" "$ZIP"

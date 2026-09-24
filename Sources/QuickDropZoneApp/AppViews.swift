@@ -96,7 +96,7 @@ private struct DropZoneView: View {
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
-                            Text("Choose a favorite folder. A suggestion may appear if a rule or the on-device model matches.")
+                            Text("Choose a favorite folder. No confident match was found, so no destination is preselected.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -227,32 +227,38 @@ private struct CleanupView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Suggested new folders")
                                 .font(.headline)
-                            Text("Groups are unchecked. Selecting one creates the folder inside the favorite destination you choose below, then moves its files after approval.")
+                            Text("Groups start unchecked. They appear only when filenames share a specific subject. A folder is created only after approval, inside the folder being cleaned.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Picker("Create inside", selection: Binding(
-                                get: { model.newFolderParentID ?? "" },
-                                set: { model.newFolderParentID = $0.isEmpty ? nil : $0 }
-                            )) {
-                                Text("Choose destination…").tag("")
-                                ForEach(model.favoriteFolders) { folder in Text(folder.name).tag(folder.id) }
-                            }
-                            .disabled(model.favoriteFolders.isEmpty)
                             ForEach(model.folderGroups) { group in
-                                Toggle(isOn: Binding(
-                                    get: { model.selectedGroupNames.contains(group.name) },
-                                    set: { model.setFolderGroupSelected(name: group.name, selected: $0) }
-                                )) {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Toggle("Include group", isOn: Binding(
+                                        get: { model.selectedGroupIDs.contains(group.id) },
+                                        set: { model.setFolderGroupSelected(id: group.id, selected: $0) }
+                                    ))
+                                    .labelsHidden()
+                                    .toggleStyle(.checkbox)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("\(group.name) (\(group.files.count))")
+                                        TextField("Proposed folder name", text: Binding(
+                                            get: { group.name },
+                                            set: { model.renameFolderGroup(id: group.id, to: $0) }
+                                        ))
+                                        .textFieldStyle(.roundedBorder)
+                                        Text(group.reason)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                        Text("Create in: \(model.cleanupFolder?.path ?? "the folder being cleaned")")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                            .textSelection(.enabled)
                                         Text(group.files.prefix(2).map(\.lastPathComponent).joined(separator: ", "))
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                             .lineLimit(1)
                                     }
                                 }
-                                .toggleStyle(.checkbox)
-                                .disabled(model.favoriteFolders.isEmpty)
+                                .padding(.vertical, 4)
                             }
                         }
                         .padding(12)
@@ -323,7 +329,7 @@ private struct CleanupView: View {
                     Button("Move Selected Files") { model.moveSelectedCleanupItems() }
                     Button("Cancel", role: .cancel) {}
                 } message: {
-                    Text("Selected files will move to the displayed destinations. Selected new-folder groups will create folders inside the chosen favorite. No files are deleted.")
+                    Text("Selected files will move to the displayed destinations. Selected groups will create the edited folder inside the folder being cleaned. No files are permanently deleted.")
                 }
             }
             .padding(12)
@@ -395,7 +401,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if model.rules.isEmpty {
-                    Text("No custom rules yet. Built-in suggestions still match common Bills, Taxes, vehicle, image, and document folders.")
+                    Text("No custom rules yet. Suggestions require a specific filename match, screenshot metadata, or a repeated learned pattern; file type alone is not enough.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.rules) { rule in
@@ -426,7 +432,7 @@ struct SettingsView: View {
             }
 
             Section("Privacy and safety") {
-                Label("Files and filenames are processed locally. Apple Foundation Models, when available, runs on-device; rules and learned filename tokens stay in this Mac’s user preferences.", systemImage: "lock.shield")
+                Label("Files, filenames, screenshot metadata, rules, and learning stay on this Mac. No AI service or file data is sent online; uncertain files get no suggested destination.", systemImage: "lock.shield")
                     .fixedSize(horizontal: false, vertical: true)
                 Label("Moves and folder creation happen only after you approve them. Trash suggestions are limited to matching installed-app .dmg files in Downloads, and are unchecked by default.", systemImage: "hand.raised")
                     .fixedSize(horizontal: false, vertical: true)
