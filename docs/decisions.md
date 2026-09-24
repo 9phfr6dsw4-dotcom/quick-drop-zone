@@ -16,7 +16,7 @@
 - Enforce a user's rule exactly, especially file-type conditions; a rule-constrained folder does not receive unrelated fallback suggestions.
 - Prefer specific evidence over broad similarity. Screenshot identification uses macOS screen-capture metadata, with a `Screenshot… .png` filename as backup. Include a short reason for each suggestion; show no destination when confidence is weak.
 - Learning needs repeated, distinct examples with a meaningful shared subject. AI cannot override rules or send data off-device; if confidence cannot be enforced, omit the AI guess.
-- Suggest new folders only for files with a specific shared subject or project—not generic file types or dates alone. Let the user edit the name and approve before creating the folder.
+- Suggest new folders only for files with a specific shared subject or project, with a configurable minimum of four related files by default—not generic file types or dates alone. Let the user edit the name and approve before creating the folder.
 
 ## Build and distribution
 

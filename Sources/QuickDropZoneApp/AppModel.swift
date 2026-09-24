@@ -44,8 +44,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var trashRows: [TrashEntry] = []
     @Published private(set) var folderGroups: [FolderGroup] = []
     @Published var selectedGroupIDs: Set<String> = []
+    @Published private(set) var minimumRelatedFileCount: Int = FolderGroupingSettings.defaultMinimumRelatedFiles
 
     private let defaults: UserDefaults
+    private let folderGroupingSettings: FolderGroupingSettings
     private let fileManager = FileManager.default
     private let mover = FileMoveService()
     private let foldersKey = "QuickDropZone.favoriteFolders.v1"
@@ -57,6 +59,9 @@ final class AppModel: ObservableObject {
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        let groupingSettings = FolderGroupingSettings(defaults: defaults)
+        folderGroupingSettings = groupingSettings
+        minimumRelatedFileCount = groupingSettings.minimumRelatedFiles
         favoriteFolders = Self.decode([FavoriteFolder].self, key: foldersKey, defaults: defaults) ?? []
         rules = Self.decode([DestinationRule].self, key: rulesKey, defaults: defaults) ?? []
         learning = Self.decode([LearningRecord].self, key: learningKey, defaults: defaults) ?? []
@@ -244,6 +249,12 @@ final class AppModel: ObservableObject {
         folderGroups[index].name = name
     }
 
+    func setMinimumRelatedFileCount(_ count: Int) {
+        folderGroupingSettings.minimumRelatedFiles = count
+        minimumRelatedFileCount = folderGroupingSettings.minimumRelatedFiles
+        refreshFolderGroups()
+    }
+
     func moveSelectedCleanupItems() {
         var movedCount = 0
         var receipts: [FileMoveReceipt] = []
@@ -390,7 +401,7 @@ final class AppModel: ObservableObject {
 
     private func refreshFolderGroups() {
         let unassignedFiles = cleanupRows.filter { $0.destinationID == nil }.map(\.url)
-        folderGroups = FolderGrouping.suggest(for: unassignedFiles)
+        folderGroups = FolderGrouping.suggest(for: unassignedFiles, minimumGroupSize: minimumRelatedFileCount)
         selectedGroupIDs = selectedGroupIDs.intersection(Set(folderGroups.map(\.id)))
     }
 

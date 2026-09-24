@@ -431,6 +431,22 @@ struct SettingsView: View {
                 .disabled(model.favoriteFolders.isEmpty)
             }
 
+            Section("New folder suggestions") {
+                Stepper(
+                    value: Binding(
+                        get: { model.minimumRelatedFileCount },
+                        set: { model.setMinimumRelatedFileCount($0) }
+                    ),
+                    in: FolderGroupingSettings.minimumAllowed...FolderGroupingSettings.maximumAllowed
+                ) {
+                    Text("Minimum related files: \(model.minimumRelatedFileCount)")
+                }
+                Text("Only propose a new folder when at least this many files share a specific subject or project. Default: 4.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("Privacy and safety") {
                 Label("Files, filenames, screenshot metadata, rules, and learning stay on this Mac. No AI service or file data is sent online; uncertain files get no suggested destination.", systemImage: "lock.shield")
                     .fixedSize(horizontal: false, vertical: true)

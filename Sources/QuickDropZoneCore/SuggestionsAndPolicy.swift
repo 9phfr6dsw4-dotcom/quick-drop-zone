@@ -253,8 +253,36 @@ public struct FolderGroup: Equatable, Identifiable {
     }
 }
 
+public struct FolderGroupingSettings {
+    public static let defaultMinimumRelatedFiles = 4
+    public static let minimumAllowed = 2
+    public static let maximumAllowed = 100
+
+    private let defaults: UserDefaults
+    private let key: String
+
+    public init(defaults: UserDefaults = .standard, key: String = "QuickDropZone.minimumRelatedFiles.v1") {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    public var minimumRelatedFiles: Int {
+        get {
+            guard defaults.object(forKey: key) != nil else { return Self.defaultMinimumRelatedFiles }
+            return Self.clamped(defaults.integer(forKey: key))
+        }
+        nonmutating set {
+            defaults.set(Self.clamped(newValue), forKey: key)
+        }
+    }
+
+    private static func clamped(_ value: Int) -> Int {
+        min(max(value, minimumAllowed), maximumAllowed)
+    }
+}
+
 public enum FolderGrouping {
-    public static func suggest(for files: [URL], minimumGroupSize: Int = 2) -> [FolderGroup] {
+    public static func suggest(for files: [URL], minimumGroupSize: Int = FolderGroupingSettings.defaultMinimumRelatedFiles) -> [FolderGroup] {
         var filesBySubject: [String: [URL]] = [:]
         for file in files {
             for subject in SuggestionEngine.filenameTokens(file.lastPathComponent) {
