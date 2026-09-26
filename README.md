@@ -1,47 +1,54 @@
-# Quick Drop Zone
+<p align="center">
+  <img src="docs/images/quick-drop-zone-icon.png" width="88" alt="Quick Drop Zone app icon">
+</p>
 
-Quick Drop Zone is a native SwiftUI/AppKit menu-bar utility for macOS 26 and newer. Drop a file into its popover, choose a favorite folder, and confirm the move. It has no Dock icon.
+<h1 align="center">Quick Drop Zone</h1>
+
+<p align="center">A careful, local-first file organizer in the macOS menu bar.</p>
+
+<p align="center"><a href="https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest"><strong>Download the latest release</strong></a> · macOS 26+</p>
 
 ## Features
 
-- Favorite folders are selected in a native folder picker and stored as security-scoped bookmarks.
-- File moves require an explicit destination-button click. The latest move can be undone.
-- Suggestions obey extension rules exactly. Screenshot detection checks macOS's screen-capture metadata and uses `Screenshot… .png` names only as a fallback. Learning requires at least three distinct same-extension examples with a shared meaningful subject; weak matches produce no suggestion. Every suggestion includes a reason.
-- Cleanup reviews visible, top-level regular files in Downloads or any folder you choose. You can change destinations, uncheck files, and approve a batch.
-- Unassigned files are grouped only when their filenames share a specific subject and meet the configurable minimum related-file count (default 4; change it in Settings → New folder suggestions). Groups are unchecked and show the editable folder name, reason, and the folder being cleaned as the creation location. The folder is created only after approval; Undo restores the files and removes the new folder only if it is app-created and empty.
-- The on-device model is not used as a destination fallback; uncertain files remain unsorted rather than receiving a guess.
-- Trash suggestions have a separate review section and are unchecked by default. The app only allows a matching `.dmg` installer directly in Downloads when the matching `.app` bundle is directly in `/Applications`. Moving to Trash uses macOS Trash; the app never permanently deletes files or empties Trash.
-- No file contents are read, and the app has no networking or analytics code.
+- Drop a file into the menu-bar popover, review the reason, then explicitly choose a destination. Uncertain files stay unsorted.
+- Extension rules are followed exactly. Local learning suggests a destination only after at least three distinct same-extension examples share a meaningful subject. Screenshot detection checks local capture metadata.
+- Cleanup reviews visible top-level files in Downloads or a folder you choose. New-folder groups start unchecked and are created only after approval.
+- Trash suggestions are separate and unchecked. Only a `.dmg` directly in Downloads with its matching `.app` directly in `/Applications` can be moved to macOS Trash; files are never permanently deleted.
+- Undo the latest move.
+- No file contents are read, and Quick Drop Zone has no networking or analytics.
 
-## Download and open
+## Install
 
-1. Open the [v1.2.0 release page](https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/tag/v1.2.0).
-2. Download `Quick-Drop-Zone-1.2.0.zip` from **Assets** and unzip it.
-3. Move **Quick Drop Zone.app** to **Applications**.
-4. The app is ad-hoc signed, not notarized. The first time, Control-click **Quick Drop Zone.app**, choose **Open**, then choose **Open** again.
-5. Look for the tray/download icon in the menu bar. Click it to open the drop window. Use **Settings** to add favorite folders.
+1. Download the ZIP from the latest release and unzip it.
+2. Move **Quick Drop Zone.app** to **Applications before opening it**.
+3. Open it once. If macOS blocks it, go to **System Settings → Privacy & Security → Open Anyway**, confirm, then reopen the app from Applications.
+4. Click the app’s tray-and-arrow icon in the menu bar. Choose folders through the app when adding favorites or reviewing files.
 
-## Build and test
+The release is ad-hoc signed and not notarized. No Full Disk Access permission is needed; folder access is granted through the folders you choose in the app.
 
-Requires Xcode with the macOS 26 SDK:
+## Privacy
 
-```bash
+Preferences, learned filename patterns, names, and screenshot metadata stay on your Mac. The app does not read file contents or send files, filenames, or metadata to an online service. Uncertain suggestions are not sent to an AI service or used as a destination fallback.
+
+<details>
+<summary>Build and test</summary>
+
+Requires Xcode with the macOS 26 SDK.
+
+```sh
 swift test
 bash Scripts/package-app.sh
 bash Scripts/smoke-test.sh
 ```
 
-GitHub Actions uses the standard `macos-26` runner, checks the installed Xcode and SDK, runs the core tests, packages a `.app`, verifies the executable after extracting the exact ZIP, and smoke-launches the app. The downloadable ZIP and SHA-256 sidecar are uploaded as a run artifact.
+</details>
 
-### Maintainer release workflow
+<details>
+<summary>Maintainer release checklist</summary>
 
-1. Push the tested source and wait for the matching macOS CI run to pass. Review the run logs; do not treat a compile or upload step alone as verification.
-2. Download the ZIP and checksum sidecar from that successful run. Verify the checksum and ZIP integrity, then inspect the extracted `.app` and executable. Do not rebuild or repackage after this check.
-3. Create a versioned GitHub Release and attach those exact two CI files. Read the release back, download the public ZIP, and confirm its checksum matches the CI artifact.
-4. Give users the direct ZIP download link and simple unzip/Applications/first-open instructions. Say plainly that the ad-hoc-signed app is not notarized.
+1. Wait for the macOS CI run to pass.
+2. Download its ZIP and SHA-256 sidecar, then verify the checksum and extracted app.
+3. Attach those exact files to the versioned GitHub Release. Do not rebuild after verification.
+4. Download the public ZIP and confirm it matches the CI checksum.
 
-Never put user files, file names, private preferences, credentials, or signing material in the public repository, test fixtures, CI logs, or artifacts. GitHub hosts source and the app distribution only; app file operations and user data remain on the Mac.
-
-## Privacy
-
-Preferences and learned filename tokens are stored in this Mac’s `UserDefaults`. Screenshot metadata and file names are read locally. No files, file names, or metadata are sent online; the app does not use an AI service to guess destinations.
+</details>
