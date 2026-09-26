@@ -33,7 +33,7 @@ A completed move can be reversed from the main window.
 - Cleanup reviews visible top-level files in Downloads or a folder you choose. New-folder groups start unchecked and are created only after approval.
 - Trash suggestions are separate and unchecked. Only a `.dmg` directly in Downloads with its matching `.app` directly in `/Applications` can be moved to macOS Trash; files are never permanently deleted.
 - Undo the latest move.
-- No file contents are read, and Quick Drop Zone has no networking or analytics.
+- The app does not inspect file contents to make suggestions; it uses filenames and local screenshot metadata. Quick Drop Zone has no networking or analytics.
 
 ## Install
 
@@ -49,7 +49,7 @@ The release is ad-hoc signed and not notarized. If macOS blocks the app, go to *
 
 </details>
 
-No Full Disk Access permission is needed; folder access is granted through the folders you choose in the app.
+No Full Disk Access permission is needed. Cleanup reviews Downloads, and `.dmg` trash suggestions check `/Applications` for the matching app. Access to other folders is granted through folders you choose in the app.
 
 ## Privacy
 
