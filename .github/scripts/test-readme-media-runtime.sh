@@ -72,10 +72,17 @@ fi
 
 GITHUB_EVENT_NAME=workflow_dispatch
 GITHUB_REF=refs/heads/main
-require_trusted_main_dispatch || { echo 'FAIL: accept trusted main workflow dispatch' >&2; exit 1; }
+GITHUB_REPOSITORY=9phfr6dsw4-dotcom/quick-drop-zone
+require_trusted_main_dispatch 9phfr6dsw4-dotcom/quick-drop-zone || { echo 'FAIL: accept trusted canonical-repository main workflow dispatch' >&2; exit 1; }
 GITHUB_REF=refs/heads/feature
-if require_trusted_main_dispatch; then
+if require_trusted_main_dispatch 9phfr6dsw4-dotcom/quick-drop-zone; then
   echo 'FAIL: reject workflow dispatch from an untrusted ref' >&2
+  exit 1
+fi
+GITHUB_REF=refs/heads/main
+GITHUB_REPOSITORY=attacker/quick-drop-zone
+if require_trusted_main_dispatch 9phfr6dsw4-dotcom/quick-drop-zone; then
+  echo 'FAIL: reject workflow dispatch from a fork' >&2
   exit 1
 fi
 

@@ -8,16 +8,20 @@ permissions:
 
 jobs:
   capture:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == '9phfr6dsw4-dotcom/quick-drop-zone'
     runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
       - name: Test README media safety and format checks
         run: |
           bash .github/scripts/test-readme-media-runtime.sh
           python3 .github/scripts/test-readme-media-artifacts.py
           python3 .github/scripts/test-readme-media-paths.py
+          python3 .github/scripts/test-readme-media-release.py
       - name: Validate and prepare temporary capture paths
         run: |
           python3 .github/scripts/prepare-readme-media-workspace.py "$GITHUB_WORKSPACE" "$RUNNER_TEMP" quick-drop-zone
@@ -25,7 +29,15 @@ jobs:
       - name: Download published release app
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download --repo 9phfr6dsw4-dotcom/quick-drop-zone --pattern '*.zip' --dir "$RUNNER_TEMP/release-download"
+        run: |
+          tag_sha="$(gh api repos/9phfr6dsw4-dotcom/quick-drop-zone/git/ref/tags/v1.2.1 --jq .object.sha)"
+          test "$tag_sha" = '0bc41de7eb753d3531ac2450da10ee87db87d8f1'
+          gh release download v1.2.1 --repo 9phfr6dsw4-dotcom/quick-drop-zone \
+            --pattern 'Quick-Drop-Zone-1.2.1.zip' \
+            --pattern 'Quick-Drop-Zone-1.2.1.zip.sha256' \
+            --dir "$RUNNER_TEMP/release-download"
+      - name: Verify pinned release ZIP and checksum sidecar
+        run: python3 .github/scripts/verify-readme-media-release.py "$RUNNER_TEMP/release-download"
       - name: Capture the published release app and prepare README media
         env:
           APP_KEY: quick-drop-zone
@@ -40,5 +52,5 @@ jobs:
             docs/images/quick-drop-zone-hero.gif
             docs/images/social-preview.png
             ${{ runner.temp }}/readme-media/*
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
