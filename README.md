@@ -13,7 +13,7 @@
 Cleanup suggestions stay visible until you approve them.
 
 <p align="center">
-  <img src="docs/images/cleanup-review.png" width="620" alt="Cleanup review showing eight selected screenshot files, their Screenshots destination, trash suggestions left unchecked, and the Approve &amp; Move button">
+  <img src="docs/images/cleanup-review.png" width="620" alt="Quick Drop Zone cleanup review with eight selected screenshot files set to Screenshots; the trash-suggestions section says No eligible installers found, and Approve &amp; Move is visible">
 </p>
 
 ## Features
@@ -39,7 +39,7 @@ The release is ad-hoc signed and not notarized. No Full Disk Access permission i
 Preferences, learned filename patterns, names, and screenshot metadata stay on your Mac. The app does not read file contents or send files, filenames, or metadata to an online service. Uncertain suggestions are not sent to an AI service or used as a destination fallback.
 
 <p align="center">
-  <img src="docs/images/settings-privacy.png" width="900" alt="Quick Drop Zone Settings showing the Screenshots rule, minimum related files setting, and on-device privacy and approval safeguards">
+  <img src="docs/images/settings-privacy.png" width="900" alt="Quick Drop Zone Settings with the Screenshots rule, minimum related files set to 4, and privacy notes that data stays on this Mac and moves or folder creation require approval">
 </p>
 
 <details>
