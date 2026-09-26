@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   capture:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: macos-26
     timeout-minutes: 45
     steps:
@@ -16,10 +17,18 @@ jobs:
         run: |
           bash .github/scripts/test-readme-media-runtime.sh
           python3 .github/scripts/test-readme-media-artifacts.py
+          python3 .github/scripts/test-readme-media-paths.py
+      - name: Validate and prepare temporary capture paths
+        run: |
+          python3 .github/scripts/prepare-readme-media-workspace.py "$GITHUB_WORKSPACE" "$RUNNER_TEMP" quick-drop-zone
+          python3 .github/scripts/prepare-readme-media-artifacts.py "$RUNNER_TEMP" "$RUNNER_TEMP/readme-media"
+      - name: Download published release app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download --repo 9phfr6dsw4-dotcom/quick-drop-zone --pattern '*.zip' --dir "$RUNNER_TEMP/release-download"
       - name: Capture the published release app and prepare README media
         env:
           APP_KEY: quick-drop-zone
-          GH_TOKEN: ${{ github.token }}
         run: bash .github/scripts/capture-readme-media.sh
       - uses: actions/upload-artifact@v4
         if: success()

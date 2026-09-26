@@ -27,6 +27,8 @@ jobs:
         run: swift test
       - name: Build, package, and verify app bundle and ZIP
         run: bash Scripts/package-app.sh
+      - name: Verify downloadable ZIP checksum sidecar
+        run: python3 Scripts/test_checksum_sidecar.py dist/Quick-Drop-Zone-1.2.1.zip
       - name: Launch app smoke test
         run: bash Scripts/smoke-test.sh
       - name: Upload finished app ZIP

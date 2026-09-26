@@ -1,6 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+require_trusted_main_dispatch() {
+  [[ "${GITHUB_EVENT_NAME:-}" == workflow_dispatch && "${GITHUB_REF:-}" == refs/heads/main ]] || {
+    printf 'README-media capture is allowed only for workflow_dispatch on refs/heads/main.\n' >&2
+    return 1
+  }
+}
+
+set_appearance() {
+  local dark="$1" actual
+  [[ "$dark" == true || "$dark" == false ]] || { printf 'Invalid dark-mode value: %s\n' "$dark" >&2; return 1; }
+  local setter='tell application "System Events" to tell appearance preferences to set dark mode to '
+  setter+="$dark"
+  if ! osascript -e "$setter"; then
+    printf 'Could not switch appearance to dark=%s; refusing to capture.\n' "$dark" >&2
+    return 1
+  fi
+  sleep 2
+  if ! actual="$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode')"; then
+    printf 'Could not verify system appearance after requesting dark=%s.\n' "$dark" >&2
+    return 1
+  fi
+  if [[ "$actual" != "$dark" ]]; then
+    printf 'System appearance did not reach dark=%s (actual=%s); refusing to capture.\n' "$dark" "$actual" >&2
+    return 1
+  fi
+}
+
 duration_is_acceptable() {
   local duration="${1:-}"
   [[ "$duration" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
@@ -143,10 +170,10 @@ tell application "System Events"
 end tell
 APPLESCRIPT
       for demo_file in \
-        "$HOME/Downloads/Atlas-project-brief.pdf" \
-        "$HOME/Downloads/Atlas-review-notes.md" \
-        "$HOME/Downloads/Atlas-timeline.xlsx" \
-        "$HOME/Downloads/Atlas-copy-draft.docx"; do
+        "$FIXTURE_DOWNLOADS/Atlas-project-brief.pdf" \
+        "$FIXTURE_DOWNLOADS/Atlas-review-notes.md" \
+        "$FIXTURE_DOWNLOADS/Atlas-timeline.xlsx" \
+        "$FIXTURE_DOWNLOADS/Atlas-copy-draft.docx"; do
         [[ -f "$demo_file" ]] || { printf 'Undo failed to restore synthetic demo file: %s\n' "$demo_file" >&2; return 1; }
       done
       show_menu_popover || return 1

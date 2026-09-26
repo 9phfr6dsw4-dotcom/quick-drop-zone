@@ -37,5 +37,5 @@ python3 Scripts/test_icon_package.py "$ROOT_DIR/Resources/AppIcon-1024.png" "$RO
 plutil -lint "$EXTRACTED_APP/Contents/Info.plist"
 codesign --verify --deep --strict "$EXTRACTED_APP"
 file "$EXTRACTED_APP/Contents/MacOS/QuickDropZone"
-shasum -a 256 "$ZIP" > "$ZIP.sha256"
+bash Scripts/write-checksum-sidecar.sh "$ZIP"
 printf 'Verified package: %s\n' "$ZIP"

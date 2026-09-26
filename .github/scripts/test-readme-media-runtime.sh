@@ -28,7 +28,7 @@ for geometry in \
   fi
 done
 if menu_capture_region '500|22|400|500|880|0|32|24|0' 'frame=1920x1080|pixels=3840x2160|scale=0' >/dev/null 2>&1; then
-  printf '%s\\n' 'FAIL: reject invalid display scale' >&2
+  printf 'FAIL: reject invalid display scale\n' >&2
   exit 1
 fi
 
@@ -70,4 +70,43 @@ if duration_is_acceptable invalid; then
   exit 1
 fi
 
-printf '%s\n' 'PASS: video crop and duration validation cases'
+GITHUB_EVENT_NAME=workflow_dispatch
+GITHUB_REF=refs/heads/main
+require_trusted_main_dispatch || { echo 'FAIL: accept trusted main workflow dispatch' >&2; exit 1; }
+GITHUB_REF=refs/heads/feature
+if require_trusted_main_dispatch; then
+  echo 'FAIL: reject workflow dispatch from an untrusted ref' >&2
+  exit 1
+fi
+
+MOCK_SET_STATUS=0
+MOCK_QUERY_STATUS=0
+MOCK_APPEARANCE_MODE=true
+MOCK_QUERY_COUNT=0
+osascript() {
+  case "$*" in
+    *'set dark mode to '*) return "$MOCK_SET_STATUS" ;;
+    *'get dark mode'*)
+      MOCK_QUERY_COUNT=$((MOCK_QUERY_COUNT + 1))
+      echo "$MOCK_APPEARANCE_MODE"
+      return "$MOCK_QUERY_STATUS"
+      ;;
+    *) return 1 ;;
+  esac
+}
+sleep() { :; }
+set_appearance true || { echo 'FAIL: accept a verified appearance change' >&2; exit 1; }
+MOCK_APPEARANCE_MODE=false
+if set_appearance true; then
+  echo 'FAIL: refuse a mismatched appearance change' >&2
+  exit 1
+fi
+MOCK_QUERY_COUNT=0
+MOCK_SET_STATUS=1
+if set_appearance false; then
+  echo 'FAIL: refuse a failed appearance change' >&2
+  exit 1
+fi
+assert_equal 0 "$MOCK_QUERY_COUNT" 'do not query or capture after appearance setter fails'
+
+echo 'PASS: video crop, duration, trusted dispatch, and fail-closed appearance cases'
