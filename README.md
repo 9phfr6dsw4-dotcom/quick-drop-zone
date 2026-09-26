@@ -13,7 +13,15 @@
 Cleanup suggestions stay visible until you approve them.
 
 <p align="center">
-  <img src="docs/images/cleanup-review.png" width="620" alt="Quick Drop Zone cleanup review with eight selected screenshot files set to Screenshots; the trash-suggestions section says No eligible installers found, and Approve &amp; Move is visible">
+  <img src="docs/images/cleanup-review.png" width="620" alt="Quick Drop Zone cleanup review showing checked screenshot files assigned to Screenshots, the Downloads-only trash-suggestions note, and 8 selected with Approve &amp; Move available">
+</p>
+
+## Undo the latest move
+
+A completed move can be reversed from the main window.
+
+<p align="center">
+  <img src="docs/images/undo-last-move.png" width="620" alt="Quick Drop Zone main window showing 24 moved items and the Undo Last Move control">
 </p>
 
 ## Features
