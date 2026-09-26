@@ -9,9 +9,61 @@ require_trusted_main_dispatch() {
   }
 }
 
+APPEARANCE_ORIGINAL=''
+APPEARANCE_ORIGINAL_SET=0
+
+remember_original_appearance() {
+  [[ "$APPEARANCE_ORIGINAL_SET" == 1 ]] && return 0
+  local actual
+  if ! actual="$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode')"; then
+    printf 'Could not read system appearance before capture.\n' >&2
+    return 1
+  fi
+  if [[ "$actual" != true && "$actual" != false ]]; then
+    printf 'Unexpected system appearance value before capture: %s\n' "$actual" >&2
+    return 1
+  fi
+  APPEARANCE_ORIGINAL="$actual"
+  APPEARANCE_ORIGINAL_SET=1
+}
+
+restore_appearance() {
+  [[ "$APPEARANCE_ORIGINAL_SET" == 1 ]] || return 0
+  local actual setter
+  if ! actual="$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode')"; then
+    printf 'Could not read system appearance while restoring the original mode.\n' >&2
+    return 1
+  fi
+  if [[ "$actual" != true && "$actual" != false ]]; then
+    printf 'Unexpected system appearance value while restoring: %s\n' "$actual" >&2
+    return 1
+  fi
+  if [[ "$actual" != "$APPEARANCE_ORIGINAL" ]]; then
+    setter='tell application "System Events" to tell appearance preferences to set dark mode to '
+    setter+="$APPEARANCE_ORIGINAL"
+    if ! osascript -e "$setter"; then
+      printf 'Could not restore original system appearance dark=%s.\n' "$APPEARANCE_ORIGINAL" >&2
+      return 1
+    fi
+    sleep 2
+    if ! actual="$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode')"; then
+      printf 'Could not verify restoration of the original system appearance.\n' >&2
+      return 1
+    fi
+    if [[ "$actual" != "$APPEARANCE_ORIGINAL" ]]; then
+      printf 'System appearance restoration failed (expected=%s, actual=%s).\n' \
+        "$APPEARANCE_ORIGINAL" "$actual" >&2
+      return 1
+    fi
+  fi
+  APPEARANCE_ORIGINAL=''
+  APPEARANCE_ORIGINAL_SET=0
+}
+
 set_appearance() {
   local dark="$1" actual
   [[ "$dark" == true || "$dark" == false ]] || { printf 'Invalid dark-mode value: %s\n' "$dark" >&2; return 1; }
+  remember_original_appearance || return 1
   local setter='tell application "System Events" to tell appearance preferences to set dark mode to '
   setter+="$dark"
   if ! osascript -e "$setter"; then

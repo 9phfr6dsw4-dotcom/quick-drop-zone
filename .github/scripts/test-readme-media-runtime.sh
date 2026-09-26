@@ -2,6 +2,34 @@
 set -euo pipefail
 source "$(dirname "$0")/readme-media-runtime.sh"
 
+CAPTURE_SCRIPT="$(cd "$(dirname "$0")" && pwd -P)/capture-readme-media.sh"
+RUNTIME_HELPER="$(cd "$(dirname "$0")" && pwd -P)/readme-media-runtime.sh"
+MEDIA_HELPER="$(cd "$(dirname "$0")" && pwd -P)/render-readme-media.swift"
+python3 - "$CAPTURE_SCRIPT" "$RUNTIME_HELPER" "$MEDIA_HELPER" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+forbidden = {
+    "setting desktop wallpaper": r"""(?is)\bevery\s+desktop\b.*?\bset\s+picture\b""",
+    "changing Finder desktop visibility": r"""(?im)\bdefaults\s+write\s+com\.apple\.finder\s+CreateDesktop\b""",
+    "restarting Finder": r"""(?im)\bkillall\s+Finder\b""",
+    "closing every Finder window": r"""(?is)tell\s+application\s+['"]Finder['"].*?close\s+every\s+window""",
+    "closing every Terminal window": r"""(?is)tell\s+application\s+['"]Terminal['"].*?close\s+every\s+window""",
+}
+violations = []
+for filename in sys.argv[1:]:
+    source = Path(filename).read_text(encoding="utf-8")
+    violations.extend(f"{Path(filename).name}: {label}" for label, pattern in forbidden.items() if re.search(pattern, source))
+capture = Path(sys.argv[1]).read_text(encoding="utf-8")
+if not re.search(r"""(?m)^trap\s+finish_capture\s+EXIT\s*$""", capture):
+    violations.append("restoring appearance state on every capture exit")
+if not re.search(r"""(?s)finish_capture\s*\(\)\s*\{[^}]*restore_appearance""", capture):
+    violations.append("capture exit handler restores original appearance")
+if violations:
+    raise SystemExit("FAIL: unsafe desktop behavior in capture helper: " + ", ".join(violations))
+PY
+
 ffprobe() { printf '%s\n' "${MOCK_VIDEO_DIMENSIONS:?}"; }
 
 assert_equal() {
@@ -75,24 +103,36 @@ GITHUB_REF=refs/heads/main
 GITHUB_REPOSITORY=9phfr6dsw4-dotcom/quick-drop-zone
 require_trusted_main_dispatch 9phfr6dsw4-dotcom/quick-drop-zone || { echo 'FAIL: accept trusted canonical-repository main workflow dispatch' >&2; exit 1; }
 GITHUB_REF=refs/heads/feature
-if require_trusted_main_dispatch 9phfr6dsw4-dotcom/quick-drop-zone; then
+if require_trusted_main_dispatch 9phfr6dsw4-dotcom/quick-drop-zone 2>/dev/null; then
   echo 'FAIL: reject workflow dispatch from an untrusted ref' >&2
   exit 1
 fi
 GITHUB_REF=refs/heads/main
 GITHUB_REPOSITORY=attacker/quick-drop-zone
-if require_trusted_main_dispatch 9phfr6dsw4-dotcom/quick-drop-zone; then
+if require_trusted_main_dispatch 9phfr6dsw4-dotcom/quick-drop-zone 2>/dev/null; then
   echo 'FAIL: reject workflow dispatch from a fork' >&2
   exit 1
 fi
 
 MOCK_SET_STATUS=0
+MOCK_SET_MUTATES_ON_ERROR=false
+MOCK_SET_EFFECTIVE_MODE=''
 MOCK_QUERY_STATUS=0
-MOCK_APPEARANCE_MODE=true
+MOCK_APPEARANCE_MODE=false
 MOCK_QUERY_COUNT=0
 osascript() {
   case "$*" in
-    *'set dark mode to '*) return "$MOCK_SET_STATUS" ;;
+    *'set dark mode to '*)
+      local requested status="$MOCK_SET_STATUS"
+      if [[ "$*" == *'set dark mode to true' ]]; then requested=true; else requested=false; fi
+      if [[ "$status" == 0 ]]; then
+        MOCK_APPEARANCE_MODE="${MOCK_SET_EFFECTIVE_MODE:-$requested}"
+      elif [[ "$MOCK_SET_MUTATES_ON_ERROR" == true ]]; then
+        MOCK_APPEARANCE_MODE="$requested"
+        MOCK_SET_STATUS=0
+      fi
+      return "$status"
+      ;;
     *'get dark mode'*)
       MOCK_QUERY_COUNT=$((MOCK_QUERY_COUNT + 1))
       echo "$MOCK_APPEARANCE_MODE"
@@ -102,18 +142,38 @@ osascript() {
   esac
 }
 sleep() { :; }
+APPEARANCE_ORIGINAL=''
+APPEARANCE_ORIGINAL_SET=0
 set_appearance true || { echo 'FAIL: accept a verified appearance change' >&2; exit 1; }
-MOCK_APPEARANCE_MODE=false
-if set_appearance true; then
+assert_equal false "$APPEARANCE_ORIGINAL" 'remember the original system appearance before changing it'
+assert_equal true "$MOCK_APPEARANCE_MODE" 'apply the requested appearance'
+restore_appearance || { echo 'FAIL: restore the original system appearance' >&2; exit 1; }
+assert_equal false "$MOCK_APPEARANCE_MODE" 'restore system appearance after capture'
+assert_equal 0 "$APPEARANCE_ORIGINAL_SET" 'clear saved appearance after restoration'
+
+APPEARANCE_ORIGINAL=''
+APPEARANCE_ORIGINAL_SET=0
+MOCK_SET_EFFECTIVE_MODE=false
+if set_appearance true 2>/dev/null; then
   echo 'FAIL: refuse a mismatched appearance change' >&2
   exit 1
 fi
+restore_appearance || { echo 'FAIL: restore appearance after a mismatched setter' >&2; exit 1; }
+MOCK_SET_EFFECTIVE_MODE=''
+
+APPEARANCE_ORIGINAL=''
+APPEARANCE_ORIGINAL_SET=0
 MOCK_QUERY_COUNT=0
 MOCK_SET_STATUS=1
-if set_appearance false; then
+MOCK_SET_MUTATES_ON_ERROR=true
+if set_appearance true 2>/dev/null; then
   echo 'FAIL: refuse a failed appearance change' >&2
   exit 1
 fi
-assert_equal 0 "$MOCK_QUERY_COUNT" 'do not query or capture after appearance setter fails'
+assert_equal true "$MOCK_APPEARANCE_MODE" 'regression fixture models a setter that changed state before failing'
+restore_appearance || { echo 'FAIL: restore appearance after a failed setter' >&2; exit 1; }
+assert_equal false "$MOCK_APPEARANCE_MODE" 'restore original appearance even when setter reports failure'
+MOCK_SET_STATUS=0
+MOCK_SET_MUTATES_ON_ERROR=false
 
-echo 'PASS: video crop, duration, trusted dispatch, and fail-closed appearance cases'
+echo 'PASS: video crop, duration, trusted dispatch, safe desktop, and appearance restoration cases'

@@ -10,6 +10,16 @@ cd "$ROOT"
 APP_KEY="${APP_KEY:?APP_KEY is required}"
 source "$ROOT/.github/scripts/readme-media-runtime.sh"
 
+finish_capture() {
+  local exit_status="$?"
+  trap - EXIT
+  if ! restore_appearance; then
+    exit_status=1
+  fi
+  exit "$exit_status"
+}
+trap finish_capture EXIT
+
 case "$APP_KEY" in
   clipboard-shelf)
     RELEASE_REPO='9phfr6dsw4-dotcom/clipboard-shelf'
@@ -62,14 +72,6 @@ rm -f "$ROOT/docs/images/$SLUG-light.png" "$ROOT/docs/images/$SLUG-dark.png" "$R
 printf '%s\n' '=== Display configuration ==='
 system_profiler SPDisplaysDataType 2>&1 | tee "$ARTIFACT_DIR/display-info.txt"
 swift "$HELPER" display-info | tee -a "$ARTIFACT_DIR/display-info.txt"
-echo '=== Preparing a clean synthetic-demo desktop ==='
-swift "$HELPER" wallpaper "$RUNNER_TEMP/readme-wallpaper.png"
-osascript -e "tell application \"System Events\" to tell every desktop to set picture to \"$RUNNER_TEMP/readme-wallpaper.png\"" || printf '%s\n' 'Wallpaper AppleScript was unavailable.'
-defaults write com.apple.finder CreateDesktop false || true
-killall Finder >/dev/null 2>&1 || true
-osascript -e 'tell application "Finder" to close every window' >/dev/null 2>&1 || true
-osascript -e 'tell application "Terminal" to close every window' >/dev/null 2>&1 || true
-
 printf 'Using the already-downloaded release from %s.\n' "$RELEASE_REPO"
 if [[ "$APP_KEY" == quick-drop-zone ]]; then
   ZIP_PATH="$RELEASE_DOWNLOAD_DIR/Quick-Drop-Zone-1.2.1.zip"
@@ -325,6 +327,8 @@ prepare_clipboard_demo() {
 }
 
 prepare_quick_drop_demo() {
+  printf '%s\n' 'Creating a temporary synthetic image for the Quick Drop Zone demo.'
+  swift "$HELPER" wallpaper "$RUNNER_TEMP/readme-wallpaper.png"
   python3 "$ROOT/.github/scripts/prepare-quick-drop-zone-fixtures.py" "$RUNNER_TEMP" "$RUNNER_TEMP/readme-wallpaper.png"
   for demo_file in \
     "$FIXTURE_DOWNLOADS/Atlas-project-brief.pdf" \
