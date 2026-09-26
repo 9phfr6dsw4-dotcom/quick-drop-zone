@@ -23,10 +23,19 @@ jobs:
           echo "macOS SDK: $sdk_version"
           sdk_major="${sdk_version%%.*}"
           test "$sdk_major" -ge 26
+      - name: Run media safety tests
+        run: |
+          bash -n .github/scripts/readme-media-runtime.sh .github/scripts/test-readme-media-runtime.sh .github/scripts/capture-readme-media.sh
+          bash .github/scripts/test-readme-media-runtime.sh
+          python3 .github/scripts/test-readme-media-artifacts.py
+          python3 .github/scripts/test-readme-media-paths.py
+          python3 Scripts/test_checksum_sidecar.py
       - name: Run automated core tests
         run: swift test
       - name: Build, package, and verify app bundle and ZIP
         run: bash Scripts/package-app.sh
+      - name: Verify downloadable ZIP checksum sidecar
+        run: python3 Scripts/test_checksum_sidecar.py dist/Quick-Drop-Zone-1.2.1.zip
       - name: Launch app smoke test
         run: bash Scripts/smoke-test.sh
       - name: Upload finished app ZIP

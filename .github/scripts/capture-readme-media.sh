@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset GH_TOKEN GITHUB_TOKEN
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 [[ "$RUNNER_TEMP" == /* ]] || { printf 'RUNNER_TEMP must be an absolute path.\n' >&2; exit 2; }
-
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+[[ ! -L "${BASH_SOURCE[0]}" ]] || { printf 'Refusing to run through a symlinked capture script.\n' >&2; exit 2; }
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 cd "$ROOT"
 APP_KEY="${APP_KEY:?APP_KEY is required}"
-HELPER="$ROOT/.github/scripts/render-readme-media.swift"
-ARTIFACT_DIR="$RUNNER_TEMP/readme-media"
-EXTRACT_DIR="$RUNNER_TEMP/release-app"
-mkdir -p "$EXTRACT_DIR" "$ROOT/docs/images"
-python3 "$ROOT/.github/scripts/prepare-readme-media-artifacts.py" "$RUNNER_TEMP" "$ARTIFACT_DIR"
+source "$ROOT/.github/scripts/readme-media-runtime.sh"
+require_trusted_main_dispatch
 
 case "$APP_KEY" in
   clipboard-shelf)
@@ -49,6 +48,14 @@ case "$APP_KEY" in
   captiongrab) SLUG='captiongrab' ;;
 esac
 
+HELPER="$ROOT/.github/scripts/render-readme-media.swift"
+ARTIFACT_DIR="$RUNNER_TEMP/readme-media"
+EXTRACT_DIR="$RUNNER_TEMP/release-app"
+RELEASE_DOWNLOAD_DIR="$RUNNER_TEMP/release-download"
+FIXTURE_DOWNLOADS="$RUNNER_TEMP/quick-drop-zone-demo/Downloads"
+python3 "$ROOT/.github/scripts/prepare-readme-media-workspace.py" "$ROOT" "$RUNNER_TEMP" "$APP_KEY" --validate-only
+python3 "$ROOT/.github/scripts/prepare-readme-media-artifacts.py" "$RUNNER_TEMP" "$ARTIFACT_DIR"
+
 rm -f "$ROOT/docs/images/$SLUG-light.png" "$ROOT/docs/images/$SLUG-dark.png" "$ROOT/docs/images/$SLUG-hero.gif" "$ROOT/docs/images/social-preview.png"
 
 printf '%s\n' '=== Display configuration ==='
@@ -62,30 +69,27 @@ killall Finder >/dev/null 2>&1 || true
 osascript -e 'tell application "Finder" to close every window' >/dev/null 2>&1 || true
 osascript -e 'tell application "Terminal" to close every window' >/dev/null 2>&1 || true
 
-printf 'Downloading latest published release from %s.\n' "$RELEASE_REPO"
-mkdir -p "$RUNNER_TEMP/release-download"
-gh release download --repo "$RELEASE_REPO" --pattern '*.zip' --dir "$RUNNER_TEMP/release-download"
-ZIP_PATH="$(python3 - "$RUNNER_TEMP/release-download" <<'PY'
+printf 'Using the already-downloaded release from %s.\n' "$RELEASE_REPO"
+ZIP_PATH="$(python3 - "$RELEASE_DOWNLOAD_DIR" <<'PY'
 from pathlib import Path
 import sys
-files = sorted(Path(sys.argv[1]).glob('*.zip'))
+root = Path(sys.argv[1])
+if root.is_symlink() or not root.is_dir() or root.resolve(strict=True) != root:
+    raise SystemExit('Release download path is missing or symlinked')
+files = sorted(root.glob('*.zip'))
 if len(files) != 1:
     raise SystemExit(f'Expected one ZIP asset from the latest release; found {len(files)}')
+if files[0].is_symlink() or not files[0].is_file() or files[0].resolve(strict=True).parent != root:
+    raise SystemExit('Release ZIP must be a regular file directly inside the validated download directory')
 print(files[0])
 PY
 )"
 ditto -x -k "$ZIP_PATH" "$EXTRACT_DIR"
 APP="$EXTRACT_DIR/$APP_BUNDLE"
-test -d "$APP"
+[[ ! -L "$APP" && -d "$APP" ]]
 xattr -dr com.apple.quarantine "$APP" >/dev/null 2>&1 || true
 ICON="$ROOT/docs/images/$SLUG-icon.png"
 test -s "$ICON"
-
-set_appearance() {
-  local dark="$1"
-  osascript -e "tell application \"System Events\" to tell appearance preferences to set dark mode to $dark" || printf 'Could not switch appearance to dark=%s; retaining the runner theme.\n' "$dark"
-  sleep 2
-}
 
 show_menu_popover() {
   if menu_geometry >/dev/null 2>&1; then return 0; fi
@@ -108,7 +112,7 @@ on run argv
           try
             set itemDescription to description of candidate as text
           end try
-          if itemName contains appName or itemName contains statusLabel or itemDescription contains statusLabel then
+          if itemDescription is statusLabel then
             set statusItem to candidate
             set matches to matches + 1
           end if
@@ -125,7 +129,7 @@ on run argv
             try
               set itemDescription to description of candidate as text
             end try
-            if itemName contains appName or itemName contains statusLabel or itemDescription contains statusLabel then
+            if itemDescription is statusLabel then
               set statusItem to candidate
               set matches to matches + 1
             end if
@@ -166,7 +170,7 @@ on run argv
           try
             set itemDescription to description of candidate as text
           end try
-          if itemName contains appName or itemName contains statusLabel or itemDescription contains statusLabel then
+          if itemDescription is statusLabel then
             set statusItem to candidate
             set matches to matches + 1
           end if
@@ -183,7 +187,7 @@ on run argv
             try
               set itemDescription to description of candidate as text
             end try
-            if itemName contains appName or itemName contains statusLabel or itemDescription contains statusLabel then
+            if itemDescription is statusLabel then
               set statusItem to candidate
               set matches to matches + 1
             end if
@@ -308,29 +312,42 @@ prepare_clipboard_demo() {
 }
 
 prepare_quick_drop_demo() {
-  mkdir -p "$HOME/Downloads"
-  printf 'Sample project brief for a fictional Atlas workspace.\n' > "$HOME/Downloads/Atlas-project-brief.pdf"
-  printf 'Review notes for the fictional Atlas workspace.\n' > "$HOME/Downloads/Atlas-review-notes.md"
-  printf 'Timeline data for the fictional Atlas workspace.\n' > "$HOME/Downloads/Atlas-timeline.xlsx"
-  printf 'Draft copy for the fictional Atlas workspace.\n' > "$HOME/Downloads/Atlas-copy-draft.docx"
-  printf 'Sample team agenda.\n' > "$HOME/Downloads/Team-agenda-2026-08.docx"
-  printf 'Receipt sample.\n' > "$HOME/Downloads/invoice-2026-08.pdf"
-  printf 'Archive sample.\n' > "$HOME/Downloads/holiday-photos.zip"
-  printf 'Image sample.\n' > "$HOME/Downloads/Screenshot 2026-09-20 at 10.14.03.png"
-  cp "$RUNNER_TEMP/readme-wallpaper.png" "$HOME/Downloads/Screenshot 2026-09-20 at 10.14.03.png"
-  printf 'Meeting notes sample.\n' > "$HOME/Downloads/meeting-notes.md"
-  printf 'Design draft sample.\n' > "$HOME/Downloads/brand-board.sketch"
-  printf 'Installer sample.\n' > "$HOME/Downloads/Sample Studio.dmg"
-  printf 'Temporary export sample.\n' > "$HOME/Downloads/export-final-2.csv"
+  python3 "$ROOT/.github/scripts/prepare-quick-drop-zone-fixtures.py" "$RUNNER_TEMP" "$RUNNER_TEMP/readme-wallpaper.png"
   for demo_file in \
-    "$HOME/Downloads/Atlas-project-brief.pdf" \
-    "$HOME/Downloads/Atlas-review-notes.md" \
-    "$HOME/Downloads/Atlas-timeline.xlsx" \
-    "$HOME/Downloads/Atlas-copy-draft.docx"; do
+    "$FIXTURE_DOWNLOADS/Atlas-project-brief.pdf" \
+    "$FIXTURE_DOWNLOADS/Atlas-review-notes.md" \
+    "$FIXTURE_DOWNLOADS/Atlas-timeline.xlsx" \
+    "$FIXTURE_DOWNLOADS/Atlas-copy-draft.docx"; do
     [[ -s "$demo_file" ]] || { printf 'Atlas demo content is absent or empty: %s\n' "$demo_file" >&2; return 1; }
   done
-  sudo mkdir -p '/Applications/Sample Studio.app/Contents'
-  printf 'Synthetic demo app marker.\n' | sudo tee '/Applications/Sample Studio.app/Contents/Info.plist' >/dev/null
+}
+
+select_fixture_cleanup_folder() {
+  osascript - "$FIXTURE_DOWNLOADS" <<'APPLESCRIPT'
+on run argv
+  set fixturePath to item 1 of argv
+  tell application "System Events"
+    tell process "QuickDropZone"
+      set frontmost to true
+      click button "Choose cleanup folder" of window 1
+      delay 0.25
+      try
+        click menu item "Choose Folder…" of menu 1 of button "Choose cleanup folder" of window 1
+      on error
+        click menu item "Choose Folder..." of menu 1 of button "Choose cleanup folder" of window 1
+      end try
+      delay 0.5
+      keystroke "g" using {command down, shift down}
+      delay 0.25
+      keystroke fixturePath
+      key code 36
+      delay 0.5
+      key code 36
+      delay 1
+    end tell
+  end tell
+end run
+APPLESCRIPT
 }
 
 open_cleanup_review() {
@@ -353,28 +370,46 @@ tell application "System Events"
     end if
     delay 2
     if not (exists button "Approve & Move" of window 1) then error "Cleanup review did not open."
-    set visibleAtlasContent to ""
-    repeat with itemText in every static text of window 1
-      try
-        set visibleAtlasContent to visibleAtlasContent & " " & (value of itemText as text)
-      end try
-    end repeat
-    if visibleAtlasContent does not contain "Atlas-project-brief.pdf" then error "Atlas project brief is not visible in Cleanup review."
-    if visibleAtlasContent does not contain "Atlas-review-notes.md" then error "Atlas review notes are not visible in Cleanup review."
-    if visibleAtlasContent does not contain "Atlas-timeline.xlsx" then error "Atlas timeline is not visible in Cleanup review."
-    if visibleAtlasContent does not contain "Atlas-copy-draft.docx" then error "Atlas copy draft is not visible in Cleanup review."
-    set groupToggles to every checkbox of window 1 whose name contains "Atlas" and name contains "Include group"
-    if (count of groupToggles) is not 1 then error "Expected exactly one Atlas Include group checkbox."
-    set groupToggle to item 1 of groupToggles
-    if (value of groupToggle as text) is not "1" then click groupToggle
-    delay 1
-    if (value of groupToggle as text) is not "1" then error "Atlas group selection did not register."
   end tell
 end tell
 APPLESCRIPT
+  select_fixture_cleanup_folder
+  osascript - "$FIXTURE_DOWNLOADS" <<'APPLESCRIPT'
+on run argv
+  set fixturePath to item 1 of argv
+  tell application "System Events"
+    tell process "QuickDropZone"
+      set frontmost to true
+      delay 1
+      set visibleContent to ""
+      repeat with itemText in every static text of window 1
+        try
+          set visibleContent to visibleContent & " " & (value of itemText as text)
+        end try
+      end repeat
+      if visibleContent does not contain fixturePath then error "Cleanup review is not scoped to the RUNNER_TEMP fixture folder."
+      if visibleContent does not contain "Atlas-project-brief.pdf" then error "Atlas project brief is not visible in Cleanup review."
+      if visibleContent does not contain "Atlas-review-notes.md" then error "Atlas review notes are not visible in Cleanup review."
+      if visibleContent does not contain "Atlas-timeline.xlsx" then error "Atlas timeline is not visible in Cleanup review."
+      if visibleContent does not contain "Atlas-copy-draft.docx" then error "Atlas copy draft is not visible in Cleanup review."
+      set groupToggles to every checkbox of window 1 whose name contains "Atlas" and name contains "Include group"
+      if (count of groupToggles) is not 1 then error "Expected exactly one Atlas Include group checkbox."
+      set groupToggle to item 1 of groupToggles
+      if (value of groupToggle as text) is not "1" then click groupToggle
+      delay 1
+      if (value of groupToggle as text) is not "1" then error "Atlas group selection did not register."
+      set fourSelected to false
+      repeat with itemText in every static text of window 1
+        try
+          if (value of itemText as text) is "4 selected" then set fourSelected to true
+        end try
+      end repeat
+      if not fourSelected then error "Refusing the synthetic move unless exactly the four Atlas fixture files are selected."
+    end tell
+  end tell
+end run
+APPLESCRIPT
 }
-
-source "$ROOT/.github/scripts/readme-media-runtime.sh"
 
 caption_transcript_loaded() {
   osascript <<'APPLESCRIPT'
