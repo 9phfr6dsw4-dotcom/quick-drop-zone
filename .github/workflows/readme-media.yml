@@ -1,0 +1,31 @@
+name: README media
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture the published release app and prepare README media
+        env:
+          APP_KEY: quick-drop-zone
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/capture-readme-media.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quick-drop-zone-readme-media
+          path: |
+            docs/images/quick-drop-zone-light.png
+            docs/images/quick-drop-zone-dark.png
+            docs/images/quick-drop-zone-hero.gif
+            docs/images/social-preview.png
+            ${{ runner.temp }}/readme-media/*
+          if-no-files-found: warn
+          retention-days: 14
