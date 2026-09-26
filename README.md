@@ -43,13 +43,13 @@ A completed move can be reversed from the main window.
 4. Click the app’s tray-and-arrow icon in the menu bar. Choose folders through the app when adding favorites or reviewing files.
 
 <details>
-<summary>First launch: macOS security prompt</summary>
+<summary>First launch: macOS security and folder-access prompts</summary>
 
 The release is ad-hoc signed and not notarized. If macOS blocks the app, go to **System Settings → Privacy &amp; Security → Open Anyway**, confirm, then reopen Quick Drop Zone from **/Applications**.
 
-</details>
+No Full Disk Access permission is needed. When Quick Drop Zone first scans Downloads, macOS may ask you to allow access to that folder. Cleanup reviews Downloads, and `.dmg` trash suggestions check `/Applications` for the matching app. Access to other folders is granted through folders you choose in the app.
 
-No Full Disk Access permission is needed. Cleanup reviews Downloads, and `.dmg` trash suggestions check `/Applications` for the matching app. Access to other folders is granted through folders you choose in the app.
+</details>
 
 ## Privacy
 
