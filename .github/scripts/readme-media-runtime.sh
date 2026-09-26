@@ -2,8 +2,9 @@
 set -euo pipefail
 
 require_trusted_main_dispatch() {
-  [[ "${GITHUB_EVENT_NAME:-}" == workflow_dispatch && "${GITHUB_REF:-}" == refs/heads/main ]] || {
-    printf 'README-media capture is allowed only for workflow_dispatch on refs/heads/main.\n' >&2
+  local expected_repository="${1:-}"
+  [[ -n "$expected_repository" && "${GITHUB_EVENT_NAME:-}" == workflow_dispatch && "${GITHUB_REF:-}" == refs/heads/main && "${GITHUB_REPOSITORY:-}" == "$expected_repository" ]] || {
+    printf 'README-media capture is allowed only for workflow_dispatch on refs/heads/main in the canonical repository.\n' >&2
     return 1
   }
 }

@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 
-SCRIPT = Path(__file__).with_name("write-checksum-sidecar.sh")
+SCRIPT = Path(__file__).with_name("write-checksum-sidecar.sh").resolve()
 TEST_ROOT = Path(os.environ.get("RUNNER_TEMP") or os.environ.get("TMPDIR") or "")
 if not TEST_ROOT.is_absolute() or not TEST_ROOT.is_dir():
     raise SystemExit("Set RUNNER_TEMP or TMPDIR to an existing scratch directory for tests")
@@ -46,13 +46,14 @@ class ChecksumSidecarTests(unittest.TestCase):
     def test_generated_sidecar_works_after_zip_and_sidecar_are_downloaded_together(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_ROOT) as temporary:
             root = Path(temporary)
-            build = root / "build"
-            build.mkdir()
-            zip_path = build / "Quick-Drop-Zone-1.2.x.zip"
+            dist = root / "dist"
+            dist.mkdir()
+            zip_path = dist / "Quick-Drop-Zone-1.2.1.zip"
             zip_path.write_bytes(b"test archive payload\n")
 
             result = subprocess.run(
-                ["bash", str(SCRIPT), str(zip_path)],
+                ["bash", str(SCRIPT), f"dist/{zip_path.name}"],
+                cwd=root,
                 text=True,
                 capture_output=True,
                 check=False,

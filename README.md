@@ -8,6 +8,8 @@
 
 <p align="center"><a href="https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest"><strong>Download the latest release</strong></a> · macOS 26+</p>
 
+<p align="center"><a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a></p>
+
 ## Review before anything moves
 
 Cleanup suggestions stay visible until you approve them.
@@ -36,18 +38,25 @@ A completed move can be reversed from the main window.
 ## Install
 
 1. Download the ZIP from the latest release and unzip it.
-2. Move **Quick Drop Zone.app** to **Applications before opening it**.
-3. Open it once. If macOS blocks it, go to **System Settings → Privacy & Security → Open Anyway**, confirm, then reopen the app from Applications.
+2. Move **Quick Drop Zone.app** into **/Applications** before its first launch.
+3. Open the app from **/Applications**.
 4. Click the app’s tray-and-arrow icon in the menu bar. Choose folders through the app when adding favorites or reviewing files.
 
-The release is ad-hoc signed and not notarized. No Full Disk Access permission is needed; folder access is granted through the folders you choose in the app.
+<details>
+<summary>First launch: macOS security prompt</summary>
+
+The release is ad-hoc signed and not notarized. If macOS blocks the app, go to **System Settings → Privacy &amp; Security → Open Anyway**, confirm, then reopen Quick Drop Zone from **/Applications**.
+
+</details>
+
+No Full Disk Access permission is needed; folder access is granted through the folders you choose in the app.
 
 ## Privacy
 
 Preferences, learned filename patterns, names, and screenshot metadata stay on your Mac. The app does not read file contents or send files, filenames, or metadata to an online service. Uncertain suggestions are not sent to an AI service or used as a destination fallback.
 
 <p align="center">
-  <img src="docs/images/settings-privacy.png" width="900" alt="Quick Drop Zone Settings with the Screenshots rule, minimum related files set to 4, and privacy notes that data stays on this Mac and moves or folder creation require approval">
+  <img src="docs/images/settings-privacy.png" width="900" alt="Quick Drop Zone Settings showing the Screenshots rule, minimum related files set to 4, and privacy notes that files, names, metadata, rules, and learning stay on this Mac; moves and folder creation require approval">
 </p>
 
 <details>
@@ -72,3 +81,7 @@ bash Scripts/smoke-test.sh
 4. Download the public ZIP and confirm it matches the CI checksum.
 
 </details>
+
+## License
+
+MIT. See [LICENSE](LICENSE).

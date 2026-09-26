@@ -226,6 +226,7 @@ class ReadmeMediaWorkspaceTests(unittest.TestCase):
             "bash .github/scripts/test-readme-media-runtime.sh",
             "python3 .github/scripts/test-readme-media-artifacts.py",
             "python3 .github/scripts/test-readme-media-paths.py",
+            "python3 .github/scripts/test-readme-media-release.py",
             "python3 Scripts/test_checksum_sidecar.py",
         ):
             self.assertIn(check, macos_ci)
