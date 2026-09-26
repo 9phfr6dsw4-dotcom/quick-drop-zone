@@ -9,7 +9,6 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 cd "$ROOT"
 APP_KEY="${APP_KEY:?APP_KEY is required}"
 source "$ROOT/.github/scripts/readme-media-runtime.sh"
-require_trusted_main_dispatch
 
 case "$APP_KEY" in
   clipboard-shelf)
@@ -36,8 +35,10 @@ case "$APP_KEY" in
     TAGLINE='Get English YouTube captions and save them as Markdown or Word.'
     MENU_APP=0
     ;;
-  *) printf 'Unknown APP_KEY: %s\n' "$APP_KEY" >&2; exit 2 ;;
+  *) printf 'Unknown APP_KEY: %s' "$APP_KEY" >&2; exit 2 ;;
 esac
+
+require_trusted_main_dispatch "$RELEASE_REPO"
 
 STATUS_LABEL="$APP_NAME"
 
@@ -70,7 +71,11 @@ osascript -e 'tell application "Finder" to close every window' >/dev/null 2>&1 |
 osascript -e 'tell application "Terminal" to close every window' >/dev/null 2>&1 || true
 
 printf 'Using the already-downloaded release from %s.\n' "$RELEASE_REPO"
-ZIP_PATH="$(python3 - "$RELEASE_DOWNLOAD_DIR" <<'PY'
+if [[ "$APP_KEY" == quick-drop-zone ]]; then
+  ZIP_PATH="$RELEASE_DOWNLOAD_DIR/Quick-Drop-Zone-1.2.1.zip"
+  python3 "$ROOT/.github/scripts/verify-readme-media-release.py" "$RELEASE_DOWNLOAD_DIR"
+else
+  ZIP_PATH="$(python3 - "$RELEASE_DOWNLOAD_DIR" <<'PY'
 from pathlib import Path
 import sys
 root = Path(sys.argv[1])
@@ -83,10 +88,18 @@ if files[0].is_symlink() or not files[0].is_file() or files[0].resolve(strict=Tr
     raise SystemExit('Release ZIP must be a regular file directly inside the validated download directory')
 print(files[0])
 PY
-)"
+  )"
+fi
 ditto -x -k "$ZIP_PATH" "$EXTRACT_DIR"
 APP="$EXTRACT_DIR/$APP_BUNDLE"
 [[ ! -L "$APP" && -d "$APP" ]]
+if [[ "$APP_KEY" == quick-drop-zone ]]; then
+  bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")"
+  bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+  [[ "$bundle_identifier" == com.quickdropzone.app ]] || { printf 'Unexpected Quick Drop Zone bundle identifier: %s' "$bundle_identifier" >&2; exit 1; }
+  [[ "$bundle_version" == 1.2.1 ]] || { printf 'Unexpected Quick Drop Zone bundle version: %s' "$bundle_version" >&2; exit 1; }
+  codesign --verify --deep --strict "$APP"
+fi
 xattr -dr com.apple.quarantine "$APP" >/dev/null 2>&1 || true
 ICON="$ROOT/docs/images/$SLUG-icon.png"
 test -s "$ICON"
