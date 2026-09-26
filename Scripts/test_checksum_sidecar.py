@@ -48,7 +48,7 @@ class ChecksumSidecarTests(unittest.TestCase):
             root = Path(temporary)
             dist = root / "dist"
             dist.mkdir()
-            zip_path = dist / "Quick-Drop-Zone-1.2.x.zip"
+            zip_path = dist / "Quick-Drop-Zone-1.2.1.zip"
             zip_path.write_bytes(b"test archive payload\n")
 
             result = subprocess.run(
