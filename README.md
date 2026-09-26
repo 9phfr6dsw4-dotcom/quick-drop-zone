@@ -8,6 +8,22 @@
 
 <p align="center"><a href="https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest"><strong>Download the latest release</strong></a> · macOS 26+</p>
 
+## Review before anything moves
+
+Cleanup suggestions stay visible until you approve them.
+
+<p align="center">
+  <img src="docs/images/cleanup-review.png" width="620" alt="Quick Drop Zone cleanup review showing checked screenshot files assigned to Screenshots, the Downloads-only trash-suggestions note, and 8 selected with Approve &amp; Move available">
+</p>
+
+## Undo the latest move
+
+A completed move can be reversed from the main window.
+
+<p align="center">
+  <img src="docs/images/undo-last-move.png" width="620" alt="Quick Drop Zone main window showing 24 moved items and the Undo Last Move control">
+</p>
+
 ## Features
 
 - Drop a file into the menu-bar popover, review the reason, then explicitly choose a destination. Uncertain files stay unsorted.
@@ -29,6 +45,10 @@ The release is ad-hoc signed and not notarized. No Full Disk Access permission i
 ## Privacy
 
 Preferences, learned filename patterns, names, and screenshot metadata stay on your Mac. The app does not read file contents or send files, filenames, or metadata to an online service. Uncertain suggestions are not sent to an AI service or used as a destination fallback.
+
+<p align="center">
+  <img src="docs/images/settings-privacy.png" width="900" alt="Quick Drop Zone Settings with the Screenshots rule, minimum related files set to 4, and privacy notes that data stays on this Mac and moves or folder creation require approval">
+</p>
 
 <details>
 <summary>Build and test</summary>
