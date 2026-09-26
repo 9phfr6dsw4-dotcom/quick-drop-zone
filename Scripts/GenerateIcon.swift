@@ -1,30 +1,78 @@
-import AppKit
 import Foundation
 
-let output = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "dist/AppIcon.iconset", isDirectory: true)
-try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-let sizes: [(String, CGFloat)] = [
-    ("icon_16x16", 16), ("icon_16x16@2x", 32),
-    ("icon_32x32", 32), ("icon_32x32@2x", 64),
-    ("icon_128x128", 128), ("icon_128x128@2x", 256),
-    ("icon_256x256", 256), ("icon_256x256@2x", 512),
-    ("icon_512x512", 512), ("icon_512x512@2x", 1024)
-]
-for (name, size) in sizes {
-    let image = NSImage(size: NSSize(width: size, height: size))
-    image.lockFocus()
-    let bounds = NSRect(x: 0, y: 0, width: size, height: size)
-    let background = NSBezierPath(roundedRect: bounds.insetBy(dx: size * 0.04, dy: size * 0.04), xRadius: size * 0.22, yRadius: size * 0.22)
-    NSGradient(colors: [NSColor(calibratedRed: 0.19, green: 0.42, blue: 0.96, alpha: 1), NSColor(calibratedRed: 0.28, green: 0.22, blue: 0.75, alpha: 1)])?.draw(in: background, angle: -45)
-    if let symbol = NSImage(systemSymbolName: "tray.and.arrow.down.fill", accessibilityDescription: nil),
-       let configured = symbol.withSymbolConfiguration(.init(pointSize: size * 0.48, weight: .semibold)) {
-        let symbolSize = min(size * 0.58, configured.size.width)
-        configured.draw(in: NSRect(x: (size - symbolSize) / 2, y: (size - symbolSize) / 2, width: symbolSize, height: symbolSize), from: .zero, operation: .sourceOver, fraction: 1)
+struct IconGenerationError: Error, CustomStringConvertible {
+    let description: String
+}
+
+let arguments = Array(CommandLine.arguments.dropFirst())
+guard arguments.count == 2 else {
+    fputs("usage: GenerateIcon.swift OUTPUT.iconset SOURCE-1024.png\n", stderr)
+    exit(64)
+}
+
+let output = URL(fileURLWithPath: arguments[0], isDirectory: true)
+let source = URL(fileURLWithPath: arguments[1])
+let fileManager = FileManager.default
+let pngSignature: [UInt8] = [137, 80, 78, 71, 13, 10, 26, 10]
+
+func pngDimensions(_ url: URL) throws -> (UInt32, UInt32) {
+    let data = try Data(contentsOf: url)
+    let bytes = Array(data.prefix(24))
+    guard bytes.count == 24,
+          Array(bytes[0..<8]) == pngSignature,
+          Array(bytes[12..<16]) == [73, 72, 68, 82] else {
+        throw IconGenerationError(description: "Not a readable PNG: \(url.path)")
     }
-    image.unlockFocus()
-    guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-          let png = bitmap.representation(using: .png, properties: [:]) else {
-        fatalError("Could not render icon asset")
+    let width = UInt32(bytes[16]) << 24 | UInt32(bytes[17]) << 16 | UInt32(bytes[18]) << 8 | UInt32(bytes[19])
+    let height = UInt32(bytes[20]) << 24 | UInt32(bytes[21]) << 16 | UInt32(bytes[22]) << 8 | UInt32(bytes[23])
+    return (width, height)
+}
+
+func makeIconset() throws {
+    let sourceSize = try pngDimensions(source)
+    guard sourceSize.0 == 1024 && sourceSize.1 == 1024 else {
+        throw IconGenerationError(description: "Source icon must be 1024x1024, got \(sourceSize.0)x\(sourceSize.1)")
     }
-    try png.write(to: output.appendingPathComponent("\(name).png"))
+    try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
+
+    let sizes: [(String, Int)] = [
+        ("icon_16x16.png", 16), ("icon_16x16@2x.png", 32),
+        ("icon_32x32.png", 32), ("icon_32x32@2x.png", 64),
+        ("icon_128x128.png", 128), ("icon_128x128@2x.png", 256),
+        ("icon_256x256.png", 256), ("icon_256x256@2x.png", 512),
+        ("icon_512x512.png", 512), ("icon_512x512@2x.png", 1024)
+    ]
+
+    for (name, size) in sizes {
+        let destination = output.appendingPathComponent(name)
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        if size == 1024 {
+            // Retain the supplied source unchanged in the 512px @2x slot.
+            try fileManager.copyItem(at: source, to: destination)
+        } else {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/sips")
+            process.arguments = ["-s", "format", "png", "-z", "\(size)", "\(size)", source.path, "--out", destination.path]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw IconGenerationError(description: "sips failed while rendering \(name)")
+            }
+        }
+        let resultSize = try pngDimensions(destination)
+        guard resultSize.0 == size && resultSize.1 == size else {
+            throw IconGenerationError(description: "Generated \(name) has unexpected dimensions \(resultSize.0)x\(resultSize.1)")
+        }
+    }
+}
+
+do {
+    try makeIconset()
+} catch {
+    fputs("Icon generation failed: \(error)\n", stderr)
+    exit(1)
 }
