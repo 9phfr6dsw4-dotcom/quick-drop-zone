@@ -222,6 +222,13 @@ class ReadmeMediaWorkspaceTests(unittest.TestCase):
         macos_ci = (SCRIPT_DIR.parent / "workflows" / "macos-ci.yml").read_text(encoding="utf-8")
         self.assertNotIn("Capture the published release app", macos_ci)
         self.assertNotIn("README media", macos_ci)
+        for check in (
+            "bash .github/scripts/test-readme-media-runtime.sh",
+            "python3 .github/scripts/test-readme-media-artifacts.py",
+            "python3 .github/scripts/test-readme-media-paths.py",
+            "python3 Scripts/test_checksum_sidecar.py",
+        ):
+            self.assertIn(check, macos_ci)
 
     def test_rejects_symlinked_fixture_downloads_directory(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_ROOT) as temporary:
