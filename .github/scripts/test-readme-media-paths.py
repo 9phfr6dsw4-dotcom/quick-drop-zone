@@ -132,6 +132,23 @@ class ReadmeMediaWorkspaceTests(unittest.TestCase):
             self.assertEqual(outside.read_text(encoding="utf-8"), "keep")
             self.assertFalse((runner / "release-app").exists())
 
+    def test_rejects_symlinked_preferences_backup_without_touching_target(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_ROOT) as temporary:
+            parent = Path(temporary)
+            root = make_repo(parent)
+            outside = parent / "outside.plist"
+            outside.write_text("keep", encoding="utf-8")
+            runner = parent / "runner"
+            runner.mkdir()
+            (runner / "quick-drop-zone-preferences-backup.plist").symlink_to(outside)
+
+            result = run_workspace(root, runner)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("symlink", result.stderr.lower())
+            self.assertEqual(outside.read_text(encoding="utf-8"), "keep")
+            self.assertFalse((runner / "release-app").exists())
+
     def test_rejects_symlinked_runner_temp(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_ROOT) as temporary:
             parent = Path(temporary)

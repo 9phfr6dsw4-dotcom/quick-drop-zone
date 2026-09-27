@@ -81,6 +81,123 @@ set_appearance() {
   fi
 }
 
+APP_LAUNCHED_PROCESS=''
+APP_PREFERENCES_DOMAIN=''
+APP_PREFERENCES_BACKUP=''
+APP_PREFERENCES_EXISTED=0
+
+require_app_not_running() {
+  local process="$1" status=0
+  pgrep -x -U "$(id -u)" "$process" >/dev/null 2>&1 || status=$?
+  case "$status" in
+    0)
+      printf '%s is already running. Quit it before capture; the capture will not touch an existing copy or its data.\n' "$process" >&2
+      return 1
+      ;;
+    1) return 0 ;;
+    *)
+      printf 'Could not check whether %s is already running; refusing to capture.\n' "$process" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Call immediately before launching; require_app_not_running has already shown that
+# any process with this name that exists afterwards was started by the capture.
+mark_app_launched() {
+  APP_LAUNCHED_PROCESS="$1"
+}
+
+stop_launched_app() {
+  [[ -n "$APP_LAUNCHED_PROCESS" ]] || return 0
+  local process="$APP_LAUNCHED_PROCESS" pids attempt
+  if pids="$(pgrep -x -U "$(id -u)" "$process")"; then
+    kill -TERM $pids 2>/dev/null || true
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+      pgrep -x -U "$(id -u)" "$process" >/dev/null 2>&1 || break
+      sleep 0.5
+    done
+    if pids="$(pgrep -x -U "$(id -u)" "$process")"; then
+      kill -KILL $pids 2>/dev/null || true
+      sleep 0.5
+    fi
+    if pgrep -x -U "$(id -u)" "$process" >/dev/null 2>&1; then
+      printf 'Could not quit the %s process launched for capture.\n' "$process" >&2
+      return 1
+    fi
+  fi
+  APP_LAUNCHED_PROCESS=''
+}
+
+snapshot_app_preferences() {
+  local domain="$1" backup="$2"
+  [[ -z "$APP_PREFERENCES_DOMAIN" ]] || { printf 'App preferences were already saved for this capture.\n' >&2; return 1; }
+  [[ "$domain" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || { printf 'Invalid preferences domain: %s\n' "$domain" >&2; return 1; }
+  [[ "$backup" == /* ]] || { printf 'Preferences backup path must be absolute.\n' >&2; return 1; }
+  if [[ -L "$backup" || ( -e "$backup" && ! -f "$backup" ) ]]; then
+    printf 'Refusing symlinked or non-regular preferences backup path: %s\n' "$backup" >&2
+    return 1
+  fi
+  # A leftover backup is the only copy of preferences a failed capture could not restore.
+  if [[ -e "$backup" ]]; then
+    printf 'A previous capture left %s preferences at %s. Restore them with `defaults import %s %s`, then remove the file.\n' \
+      "$domain" "$backup" "$domain" "$backup" >&2
+    return 1
+  fi
+  if ! defaults read "$domain" >/dev/null 2>&1; then
+    APP_PREFERENCES_EXISTED=0
+    APP_PREFERENCES_DOMAIN="$domain"
+    APP_PREFERENCES_BACKUP="$backup"
+    return 0
+  fi
+  if ! defaults export "$domain" "$backup" || [[ -L "$backup" || ! -s "$backup" ]]; then
+    printf 'Could not save existing %s preferences; refusing to launch the app.\n' "$domain" >&2
+    return 1
+  fi
+  APP_PREFERENCES_EXISTED=1
+  APP_PREFERENCES_DOMAIN="$domain"
+  APP_PREFERENCES_BACKUP="$backup"
+  # Start from the same empty state as a fresh runner, so the host's real folders never
+  # appear in captures and the demo cannot act on them.
+  defaults delete "$domain" >/dev/null 2>&1 || true
+  if defaults read "$domain" >/dev/null 2>&1; then
+    printf 'Could not set aside existing %s preferences; refusing to launch the app.\n' "$domain" >&2
+    return 1
+  fi
+}
+
+# Quit the launched app first so it cannot write its preferences again afterwards.
+restore_app_preferences() {
+  [[ -n "$APP_PREFERENCES_DOMAIN" ]] || return 0
+  local domain="$APP_PREFERENCES_DOMAIN"
+  defaults delete "$domain" >/dev/null 2>&1 || true
+  if [[ "$APP_PREFERENCES_EXISTED" == 1 ]]; then
+    if ! defaults import "$domain" "$APP_PREFERENCES_BACKUP"; then
+      printf 'Could not restore %s preferences; the pre-capture copy is at %s.\n' "$domain" "$APP_PREFERENCES_BACKUP" >&2
+      return 1
+    fi
+    rm -f "$APP_PREFERENCES_BACKUP"
+  elif defaults read "$domain" >/dev/null 2>&1; then
+    printf 'Could not remove %s preferences created during capture.\n' "$domain" >&2
+    return 1
+  fi
+  APP_PREFERENCES_DOMAIN=''
+  APP_PREFERENCES_BACKUP=''
+  APP_PREFERENCES_EXISTED=0
+}
+
+# Package installs persist on the machine, so they are allowed only on ephemeral
+# GitHub-hosted runners. Anywhere else the tool must already be installed.
+ensure_capture_tool() {
+  local tool="$1"
+  command -v "$tool" >/dev/null 2>&1 && return 0
+  if [[ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]]; then
+    printf '%s is not installed. Refusing to install packages outside an ephemeral GitHub-hosted runner; install it first.\n' "$tool" >&2
+    return 1
+  fi
+  brew install "$tool"
+}
+
 duration_is_acceptable() {
   local duration="${1:-}"
   [[ "$duration" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
@@ -164,34 +281,6 @@ video_region_filter() {
 
 animate_app() {
   case "$APP_KEY" in
-    clipboard-shelf)
-      show_menu_popover
-      osascript <<'APPLESCRIPT'
-tell application "System Events"
-  tell process "ClipboardShelf"
-    set frontmost to true
-    click text field 1 of window 1
-    keystroke "b"
-    delay 0.25
-    keystroke "u"
-    delay 0.25
-    keystroke "i"
-    delay 0.25
-    keystroke "l"
-    delay 0.25
-    keystroke "d"
-    delay 0.5
-    set value of text field 1 of window 1 to ""
-    delay 0.5
-    click button "Pin clipboard item" of row 3 of table 1 of scroll area 1 of window 1
-    delay 0.5
-    click row 4 of table 1 of scroll area 1 of window 1
-    delay 1
-  end tell
-end tell
-APPLESCRIPT
-      show_menu_popover
-      ;;
     quick-drop-zone)
       show_menu_popover || return 1
       open_cleanup_review || return 1
@@ -269,7 +358,7 @@ capture_video_region() {
   fi
   if [[ -z "$crop_filter" ]]; then
     rm -f "$raw"
-    if ! command -v ffmpeg >/dev/null 2>&1; then brew install ffmpeg; fi
+    ensure_capture_tool ffmpeg || return 1
     local screen_index="${AVFOUNDATION_SCREEN_INDEX:-0}"
     printf 'Trying AVFoundation screen device %s for the same region.\n' "$screen_index"
     ffmpeg -y -f avfoundation -framerate 30 -i "$screen_index:none" -t 7 -an "$raw" >>"$capture_log" 2>&1 &
@@ -311,13 +400,13 @@ capture_video_region() {
       printf '%s\n' 'No screen frames were captured.' | tee "$ARTIFACT_DIR/video-status.txt"
       return 1
     fi
-    if ! command -v ffmpeg >/dev/null 2>&1; then brew install ffmpeg; fi
+    ensure_capture_tool ffmpeg || return 1
     ffmpeg -y -framerate 12 -i "$frames/frame_%04d.png" -frames:v 84 -c:v libx264 -pix_fmt yuv420p "$raw" >>"$capture_log" 2>&1
     crop_filter='null'
   fi
 
   [[ -s "$raw" && -n "$crop_filter" ]] || { printf '%s\n' 'No usable video recording matched the requested region.' | tee "$ARTIFACT_DIR/video-status.txt"; return 1; }
-  if ! command -v ffmpeg >/dev/null 2>&1; then brew install ffmpeg; fi
+  ensure_capture_tool ffmpeg || return 1
   ffmpeg -y -i "$raw" -vf "$crop_filter,fps=12,tpad=stop_mode=clone:stop_duration=1" -an -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$mp4" >>"$capture_log" 2>&1
   local duration gif_bytes frame_count dimensions gif_width
   duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$mp4")"
@@ -326,7 +415,7 @@ capture_video_region() {
   ffmpeg -y -i "$mp4" -i "$RUNNER_TEMP/$SLUG-palette.png" -lavfi 'fps=12,scale=800:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4' -loop 0 "$gif" >>"$capture_log" 2>&1
   gif_bytes="$(stat -f '%z' "$gif")"
   if (( gif_bytes > 6291456 )); then
-    if ! command -v gifsicle >/dev/null 2>&1; then brew install gifsicle; fi
+    ensure_capture_tool gifsicle || return 1
     gifsicle -O3 --lossy=40 "$gif" -o "$RUNNER_TEMP/$SLUG-optimized.gif"
     mv "$RUNNER_TEMP/$SLUG-optimized.gif" "$gif"
     gif_bytes="$(stat -f '%z' "$gif")"
