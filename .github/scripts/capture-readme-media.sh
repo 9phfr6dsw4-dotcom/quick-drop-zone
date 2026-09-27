@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Captures Quick Drop Zone README media on a manually dispatched runner. It must leave the
+# host as it found it: no wallpaper, Finder, Terminal, or other-app changes; demo files
+# stay under RUNNER_TEMP; and every exit quits the launched app and restores its
+# preferences and the system appearance.
 set -euo pipefail
 unset GH_TOKEN GITHUB_TOKEN
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
@@ -13,51 +17,36 @@ source "$ROOT/.github/scripts/readme-media-runtime.sh"
 finish_capture() {
   local exit_status="$?"
   trap - EXIT
+  if ! stop_launched_app; then
+    exit_status=1
+  fi
+  if ! restore_app_preferences; then
+    exit_status=1
+  fi
   if ! restore_appearance; then
     exit_status=1
   fi
   exit "$exit_status"
 }
 trap finish_capture EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 case "$APP_KEY" in
-  clipboard-shelf)
-    RELEASE_REPO='9phfr6dsw4-dotcom/clipboard-shelf'
-    APP_BUNDLE='Clipboard Shelf.app'; WINDOW_OWNER='ClipboardShelf'; APP_NAME='Clipboard Shelf'
-    TAGLINE='A quiet macOS menu-bar clipboard history with search, pins, and a pause switch.'
-    MENU_APP=1
-    ;;
   quick-drop-zone)
     RELEASE_REPO='9phfr6dsw4-dotcom/quick-drop-zone'
-    APP_BUNDLE='Quick Drop Zone.app'; WINDOW_OWNER='QuickDropZone'; APP_NAME='Quick Drop Zone'
+    APP_BUNDLE='Quick Drop Zone.app'; APP_BUNDLE_ID='com.quickdropzone.app'
+    WINDOW_OWNER='QuickDropZone'; APP_NAME='Quick Drop Zone'
     TAGLINE='A careful, local-first file organizer in the macOS menu bar.'
-    MENU_APP=1
+    SLUG='quick-drop-zone'
     ;;
-  echotype)
-    RELEASE_REPO='9phfr6dsw4-dotcom/echotype'
-    APP_BUNDLE='EchoType.app'; WINDOW_OWNER='EchoType'; APP_NAME='EchoType'
-    TAGLINE='Private, on-device dictation for macOS with Apple Speech, Parakeet v3, and Whisper.'
-    MENU_APP=0
-    ;;
-  captiongrab)
-    RELEASE_REPO='9phfr6dsw4-dotcom/captiongrab'
-    APP_BUNDLE='CaptionGrab.app'; WINDOW_OWNER='CaptionGrab'; APP_NAME='CaptionGrab'
-    TAGLINE='Get English YouTube captions and save them as Markdown or Word.'
-    MENU_APP=0
-    ;;
-  *) printf 'Unknown APP_KEY: %s' "$APP_KEY" >&2; exit 2 ;;
+  *) printf 'Unknown APP_KEY: %s. This helper captures only Quick Drop Zone.\n' "$APP_KEY" >&2; exit 2 ;;
 esac
 
 require_trusted_main_dispatch "$RELEASE_REPO"
 
 STATUS_LABEL="$APP_NAME"
-
-case "$APP_KEY" in
-  clipboard-shelf) SLUG='clipboard-shelf' ;;
-  quick-drop-zone) SLUG='quick-drop-zone' ;;
-  echotype) SLUG='echotype' ;;
-  captiongrab) SLUG='captiongrab' ;;
-esac
 
 HELPER="$ROOT/.github/scripts/render-readme-media.swift"
 ARTIFACT_DIR="$RUNNER_TEMP/readme-media"
@@ -73,35 +62,16 @@ printf '%s\n' '=== Display configuration ==='
 system_profiler SPDisplaysDataType 2>&1 | tee "$ARTIFACT_DIR/display-info.txt"
 swift "$HELPER" display-info | tee -a "$ARTIFACT_DIR/display-info.txt"
 printf 'Using the already-downloaded release from %s.\n' "$RELEASE_REPO"
-if [[ "$APP_KEY" == quick-drop-zone ]]; then
-  ZIP_PATH="$RELEASE_DOWNLOAD_DIR/Quick-Drop-Zone-1.2.1.zip"
-  python3 "$ROOT/.github/scripts/verify-readme-media-release.py" "$RELEASE_DOWNLOAD_DIR"
-else
-  ZIP_PATH="$(python3 - "$RELEASE_DOWNLOAD_DIR" <<'PY'
-from pathlib import Path
-import sys
-root = Path(sys.argv[1])
-if root.is_symlink() or not root.is_dir() or root.resolve(strict=True) != root:
-    raise SystemExit('Release download path is missing or symlinked')
-files = sorted(root.glob('*.zip'))
-if len(files) != 1:
-    raise SystemExit(f'Expected one ZIP asset from the latest release; found {len(files)}')
-if files[0].is_symlink() or not files[0].is_file() or files[0].resolve(strict=True).parent != root:
-    raise SystemExit('Release ZIP must be a regular file directly inside the validated download directory')
-print(files[0])
-PY
-  )"
-fi
+ZIP_PATH="$RELEASE_DOWNLOAD_DIR/Quick-Drop-Zone-1.2.1.zip"
+python3 "$ROOT/.github/scripts/verify-readme-media-release.py" "$RELEASE_DOWNLOAD_DIR"
 ditto -x -k "$ZIP_PATH" "$EXTRACT_DIR"
 APP="$EXTRACT_DIR/$APP_BUNDLE"
 [[ ! -L "$APP" && -d "$APP" ]]
-if [[ "$APP_KEY" == quick-drop-zone ]]; then
-  bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")"
-  bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
-  [[ "$bundle_identifier" == com.quickdropzone.app ]] || { printf 'Unexpected Quick Drop Zone bundle identifier: %s' "$bundle_identifier" >&2; exit 1; }
-  [[ "$bundle_version" == 1.2.1 ]] || { printf 'Unexpected Quick Drop Zone bundle version: %s' "$bundle_version" >&2; exit 1; }
-  codesign --verify --deep --strict "$APP"
-fi
+bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")"
+bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+[[ "$bundle_identifier" == "$APP_BUNDLE_ID" ]] || { printf 'Unexpected Quick Drop Zone bundle identifier: %s' "$bundle_identifier" >&2; exit 1; }
+[[ "$bundle_version" == 1.2.1 ]] || { printf 'Unexpected Quick Drop Zone bundle version: %s' "$bundle_version" >&2; exit 1; }
+codesign --verify --deep --strict "$APP"
 xattr -dr com.apple.quarantine "$APP" >/dev/null 2>&1 || true
 ICON="$ROOT/docs/images/$SLUG-icon.png"
 test -s "$ICON"
@@ -252,53 +222,6 @@ end run
 APPLESCRIPT
 }
 
-window_info() {
-  swift "$HELPER" window "$WINDOW_OWNER"
-}
-
-capture_app_window() {
-  local output="$1"
-  local info id x y width height scale
-  rm -f "$output"
-  info="$(window_info)"
-  IFS='|' read -r id x y width height scale <<< "$info"
-  [[ "$id" =~ ^[0-9]+$ && "$width" =~ ^[0-9]+$ && "$height" =~ ^[0-9]+$ ]]
-  (( width >= 500 && height >= 400 ))
-  printf 'Window %s bounds: id=%s x=%s y=%s width=%s height=%s backing-scale=%s\n' "$WINDOW_OWNER" "$id" "$x" "$y" "$width" "$height" "$scale"
-  screencapture -x -l "$id" "$output"
-  test -s "$output"
-}
-
-fit_app_window() {
-  local max_width="$1" max_height="$2" info frame screen_width screen_height width height
-  info="$(swift "$HELPER" display-info)"
-  IFS='|' read -r frame _ _ <<< "$info"
-  frame="${frame#frame=}"
-  screen_width="${frame%x*}"
-  screen_height="${frame#*x}"
-  [[ "$screen_width" =~ ^[0-9]+$ && "$screen_height" =~ ^[0-9]+$ ]] || return 1
-  width=$(( screen_width - 80 ))
-  height=$(( screen_height - 100 ))
-  (( width > max_width )) && width="$max_width"
-  (( height > max_height )) && height="$max_height"
-  (( width >= 680 && height >= 520 )) || return 1
-  osascript - "$WINDOW_OWNER" "$width" "$height" <<'APPLESCRIPT'
-on run argv
-  set appName to item 1 of argv
-  set windowWidth to item 2 of argv as integer
-  set windowHeight to item 3 of argv as integer
-  tell application "System Events"
-    tell process appName
-      set frontmost to true
-      set size of window 1 to {windowWidth, windowHeight}
-      set position of window 1 to {40, 40}
-    end tell
-  end tell
-end run
-APPLESCRIPT
-  printf 'Fitted %s to %sx%s within a %sx%s display.\n' "$WINDOW_OWNER" "$width" "$height" "$screen_width" "$screen_height"
-}
-
 capture_menu_region() {
   local output="$1"
   local info display_info region
@@ -320,10 +243,6 @@ capture_menu_region() {
     "$WINDOW_OWNER" "$display_info" "$LAST_MENU_REGION"
   screencapture -x -R "$region" "$output"
   test -s "$output"
-}
-
-prepare_clipboard_demo() {
-  swift "$HELPER" seed-clipboard
 }
 
 prepare_quick_drop_demo() {
@@ -428,113 +347,25 @@ end run
 APPLESCRIPT
 }
 
-caption_transcript_loaded() {
-  osascript <<'APPLESCRIPT'
-tell application "System Events"
-  tell process "CaptionGrab"
-    set foundTranscriptURL to false
-    repeat with itemText in every static text of window 1
-      try
-        if (value of itemText as text) starts with "YouTube Video url:" then set foundTranscriptURL to true
-      end try
-    end repeat
-    if not foundTranscriptURL then error "No transcript-only video URL is visible."
-  end tell
-end tell
-APPLESCRIPT
-}
-
-case "$APP_KEY" in
-  clipboard-shelf)
-    prepare_clipboard_demo
-    open "$APP"
-    sleep 5
-    set_appearance false
-    show_menu_popover
-    capture_menu_region "$ROOT/docs/images/clipboard-shelf-light.png"
-    set_appearance true
-    sleep 2
-    capture_menu_region "$ROOT/docs/images/clipboard-shelf-dark.png"
-    set_appearance false
-    show_menu_popover
-    capture_video_region "$LAST_MENU_REGION"
-    ;;
-  quick-drop-zone)
-    prepare_quick_drop_demo
-    open "$APP"
-    sleep 5
-    set_appearance false
-    show_menu_popover
-    open_cleanup_review
-    capture_menu_region "$ROOT/docs/images/quick-drop-zone-light.png"
-    set_appearance true
-    sleep 2
-    show_menu_popover
-    open_cleanup_review
-    capture_menu_region "$ROOT/docs/images/quick-drop-zone-dark.png"
-    set_appearance false
-    show_menu_popover
-    open_cleanup_review
-    capture_video_region "$LAST_MENU_REGION"
-    ;;
-  echotype)
-    swift "$HELPER" seed-echotype
-    defaults write com.echotype.app EchoType.hasSeenLaunchAtLoginOption -bool true
-    open "$APP"
-    sleep 8
-    fit_app_window 1100 950
-    set_appearance false
-    capture_app_window "$ROOT/docs/images/echotype-light.png"
-    osascript <<'APPLESCRIPT'
-tell application "System Events"
-  tell process "EchoType"
-    click radio button "Speech Models" of tab group 1 of window 1
-  end tell
-end tell
-APPLESCRIPT
-    sleep 3
-    capture_app_window "$ROOT/docs/images/echotype-model-library-light.png"
-    set_appearance true
-    osascript <<'APPLESCRIPT'
-tell application "System Events"
-  tell process "EchoType"
-    click radio button "Home" of tab group 1 of window 1
-  end tell
-end tell
-APPLESCRIPT
-    sleep 2
-    capture_app_window "$ROOT/docs/images/echotype-dark.png"
-    set_appearance false
-    ;;
-  captiongrab)
-    open "$APP"
-    sleep 6
-    fit_app_window 1100 950
-    if [[ "${ALLOW_LIVE_YOUTUBE_FETCH:-false}" != "true" ]]; then
-      printf '%s\n' 'YouTube was already tried once and returned no transcript; not repeating the live request. No CaptionGrab screenshots or social preview will be emitted.' | tee "$ARTIFACT_DIR/captiongrab-live-fetch-status.txt"
-    else
-      osascript <<'APPLESCRIPT'
-tell application "System Events"
-  tell process "CaptionGrab"
-    set frontmost to true
-    set value of text field 1 of window 1 to "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
-    click button "Get transcript" of window 1
-  end tell
-end tell
-APPLESCRIPT
-      sleep 18
-      if caption_transcript_loaded; then
-        set_appearance false
-        capture_app_window "$ROOT/docs/images/captiongrab-light.png"
-        set_appearance true
-        capture_app_window "$ROOT/docs/images/captiongrab-dark.png"
-        set_appearance false
-      else
-        printf '%s\n' 'Live fetch produced no transcript-only URL; empty-state image and social preview omitted.' | tee "$ARTIFACT_DIR/captiongrab-live-fetch-status.txt"
-      fi
-    fi
-    ;;
-esac
+prepare_quick_drop_demo
+require_app_not_running "$WINDOW_OWNER"
+snapshot_app_preferences "$APP_BUNDLE_ID" "$RUNNER_TEMP/$SLUG-preferences-backup.plist"
+mark_app_launched "$WINDOW_OWNER"
+open "$APP"
+sleep 5
+set_appearance false
+show_menu_popover
+open_cleanup_review
+capture_menu_region "$ROOT/docs/images/quick-drop-zone-light.png"
+set_appearance true
+sleep 2
+show_menu_popover
+open_cleanup_review
+capture_menu_region "$ROOT/docs/images/quick-drop-zone-dark.png"
+set_appearance false
+show_menu_popover
+open_cleanup_review
+capture_video_region "$LAST_MENU_REGION"
 
 if [[ -s "$ROOT/docs/images/$SLUG-light.png" ]]; then
   swift "$HELPER" social "$ROOT/docs/images/social-preview.png" "$ICON" "$APP_NAME" "$TAGLINE" "$ROOT/docs/images/$SLUG-light.png"
