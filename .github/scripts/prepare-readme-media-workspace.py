@@ -90,6 +90,7 @@ def validate(root_arg: str, runner_arg: str, app_key: str, *, require_prepared: 
         "readme-capture.mov",
         f"{slug}-palette.png",
         f"{slug}-optimized.gif",
+        f"{slug}-preferences-backup.plist",
     ):
         check_regular_or_missing(runner / name, "temporary capture output")
     check_directory_path(runner / f"readme-frames-{slug}", "temporary frame directory", required=False)
