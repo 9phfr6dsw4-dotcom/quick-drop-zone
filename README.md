@@ -8,7 +8,12 @@
 
 <p align="center"><a href="https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest"><strong>Download the latest release</strong></a> · macOS 26+</p>
 
-<p align="center"><a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a></p>
+<p align="center">
+  <a href="https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest"><img src="https://img.shields.io/github/v/release/9phfr6dsw4-dotcom/quick-drop-zone?display_name=tag" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-26%2B-black?logo=apple" alt="macOS 26 or later">
+  <a href="https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/actions/workflows/macos-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/9phfr6dsw4-dotcom/quick-drop-zone/macos-ci.yml?branch=main&amp;label=macOS%20CI" alt="macOS CI status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+</p>
 
 ## Review before anything moves
 
