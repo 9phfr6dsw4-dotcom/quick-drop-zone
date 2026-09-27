@@ -41,7 +41,7 @@ jobs:
       - name: Capture the published release app and prepare README media
         env:
           APP_KEY: quick-drop-zone
-        run: bash .github/scripts/capture-readme-media.sh
+        run: exec bash .github/scripts/capture-readme-media.sh
       - uses: actions/upload-artifact@v4
         if: success()
         with:

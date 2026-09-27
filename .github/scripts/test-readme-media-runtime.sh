@@ -35,9 +35,19 @@ if not re.search(r"""(?m)^trap\s+finish_capture\s+EXIT\s*$""", capture):
 for signal in ("INT", "TERM", "HUP"):
     if not re.search(rf"""(?m)^trap\s+'exit\s+[0-9]+'\s+{signal}\s*$""", capture):
         violations.append(f"running the exit handler when the capture receives {signal}")
-for restore in ("stop_launched_app", "restore_app_preferences", "restore_appearance"):
-    if not re.search(rf"""(?s)finish_capture\s*\(\)\s*\{{[^}}]*\b{restore}\b""", capture):
-        violations.append(f"capture exit handler calls {restore}")
+handler = re.search(r"""(?s)finish_capture\s*\(\)\s*\{(.*?)\n\}""", capture)
+handler_body = re.sub(r"(?m)^\s*#.*\n", "", handler.group(1)) if handler else ""
+if not re.search(r"""\A\s*local\s+exit_status="\$\?"\s*\n\s*trap\s+''\s+INT\s+TERM\s+HUP\s*\n""", handler_body):
+    violations.append("capture exit handler ignores further signals before cleaning up")
+steps = [handler_body.find(step) for step in ("stop_launched_app", "restore_app_preferences", "restore_appearance")]
+if min(steps) < 0 or steps != sorted(steps):
+    violations.append("capture exit handler quits the app, then restores its preferences, then the appearance")
+workflow = (Path(sys.argv[1]).parent.parent / "workflows" / "readme-media.yml").read_text(encoding="utf-8")
+if not re.search(r"""(?m)^\s*run:\s+exec\s+bash\s+\.github/scripts/capture-readme-media\.sh\s*$""", workflow):
+    violations.append("readme-media.yml: capture script receives cancellation signals directly")
+pgrep_calls = re.findall(r'\bpgrep\b[^\n|;&)]*', Path(sys.argv[2]).read_text(encoding="utf-8"))
+if not pgrep_calls or any(not re.search(r'-U\s+"\$\(id\s+-u\b', call) for call in pgrep_calls):
+    violations.append("readme-media-runtime.sh: only matching the current user's app processes")
 launch = re.search(r"""(?m)^\s*open\s+"\$APP"\s*$""", capture)
 guards = [capture.find(name) for name in ("require_app_not_running", "snapshot_app_preferences", "mark_app_launched")]
 if not launch or min(guards) < 0 or max(guards) > launch.start():
@@ -294,6 +304,15 @@ fi
 [[ -s "$backup" ]] || { echo 'FAIL: keep the preferences backup when restoring fails' >&2; exit 1; }
 MOCK_IMPORT_STATUS=0
 APP_PREFERENCES_DOMAIN=''
+
+printf 'left-by-a-failed-run\n' > "$backup"
+if snapshot_app_preferences com.quickdropzone.app "$backup" 2>/dev/null; then
+  echo 'FAIL: refuse to start while a previous preferences backup is still unrestored' >&2
+  exit 1
+fi
+assert_equal 'left-by-a-failed-run' "$(cat "$backup")" 'keep the only copy of preferences left by a failed run'
+assert_equal '' "$APP_PREFERENCES_DOMAIN" 'do not track a snapshot that was refused'
+rm -f "$backup"
 
 ln -s "$TEST_SCRATCH/elsewhere.plist" "$TEST_SCRATCH/linked-backup.plist"
 if snapshot_app_preferences com.quickdropzone.app "$TEST_SCRATCH/linked-backup.plist" 2>/dev/null; then

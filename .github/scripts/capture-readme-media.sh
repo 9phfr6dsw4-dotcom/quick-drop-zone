@@ -16,6 +16,9 @@ source "$ROOT/.github/scripts/readme-media-runtime.sh"
 
 finish_capture() {
   local exit_status="$?"
+  # A second Ctrl-C or the TERM that follows it must not stop cleanup halfway; children
+  # such as defaults inherit the ignored signals.
+  trap '' INT TERM HUP
   trap - EXIT
   if ! stop_launched_app; then
     exit_status=1

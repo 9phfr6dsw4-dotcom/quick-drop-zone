@@ -88,7 +88,7 @@ APP_PREFERENCES_EXISTED=0
 
 require_app_not_running() {
   local process="$1" status=0
-  pgrep -x "$process" >/dev/null 2>&1 || status=$?
+  pgrep -x -U "$(id -u)" "$process" >/dev/null 2>&1 || status=$?
   case "$status" in
     0)
       printf '%s is already running. Quit it before capture; the capture will not touch an existing copy or its data.\n' "$process" >&2
@@ -111,17 +111,17 @@ mark_app_launched() {
 stop_launched_app() {
   [[ -n "$APP_LAUNCHED_PROCESS" ]] || return 0
   local process="$APP_LAUNCHED_PROCESS" pids attempt
-  if pids="$(pgrep -x "$process")"; then
+  if pids="$(pgrep -x -U "$(id -u)" "$process")"; then
     kill -TERM $pids 2>/dev/null || true
     for attempt in 1 2 3 4 5 6 7 8 9 10; do
-      pgrep -x "$process" >/dev/null 2>&1 || break
+      pgrep -x -U "$(id -u)" "$process" >/dev/null 2>&1 || break
       sleep 0.5
     done
-    if pids="$(pgrep -x "$process")"; then
+    if pids="$(pgrep -x -U "$(id -u)" "$process")"; then
       kill -KILL $pids 2>/dev/null || true
       sleep 0.5
     fi
-    if pgrep -x "$process" >/dev/null 2>&1; then
+    if pgrep -x -U "$(id -u)" "$process" >/dev/null 2>&1; then
       printf 'Could not quit the %s process launched for capture.\n' "$process" >&2
       return 1
     fi
@@ -138,7 +138,12 @@ snapshot_app_preferences() {
     printf 'Refusing symlinked or non-regular preferences backup path: %s\n' "$backup" >&2
     return 1
   fi
-  rm -f "$backup"
+  # A leftover backup is the only copy of preferences a failed capture could not restore.
+  if [[ -e "$backup" ]]; then
+    printf 'A previous capture left %s preferences at %s. Restore them with `defaults import %s %s`, then remove the file.\n' \
+      "$domain" "$backup" "$domain" "$backup" >&2
+    return 1
+  fi
   if ! defaults read "$domain" >/dev/null 2>&1; then
     APP_PREFERENCES_EXISTED=0
     APP_PREFERENCES_DOMAIN="$domain"
