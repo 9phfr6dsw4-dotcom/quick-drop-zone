@@ -28,6 +28,8 @@ public enum FileMoveError: Error, Equatable {
     case sourceAlreadyInDestination
     case movedFileDoesNotExist
     case originalPathOccupied
+    case invalidName
+    case nameUnchanged
 }
 
 /// Performs one explicit file move and records enough information to undo it.
@@ -66,6 +68,25 @@ public struct FileMoveService {
         let targetURL = uniqueDestination(for: sourceURL, in: destinationFolderURL)
         try fileManager.moveItem(at: sourceURL, to: targetURL)
         return FileMoveReceipt(originalURL: sourceURL, movedURL: targetURL)
+    }
+
+    /// Renames a file in its own folder after you approve the new name. If the name is taken, a
+    /// number is added ("Lease renewal 2.pdf"). Undo puts the old name back.
+    public func rename(_ fileURL: URL, to newName: String) throws -> FileMoveReceipt {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != ".", name != "..", !name.contains("/"), !name.contains(":") else {
+            throw FileMoveError.invalidName
+        }
+        guard name != fileURL.lastPathComponent else { throw FileMoveError.nameUnchanged }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: fileURL.path, isDirectory: &isDirectory) else {
+            throw FileMoveError.sourceDoesNotExist
+        }
+        guard !isDirectory.boolValue else { throw FileMoveError.sourceIsDirectory }
+        let folder = fileURL.deletingLastPathComponent()
+        let target = uniqueDestination(for: folder.appendingPathComponent(name), in: folder)
+        try fileManager.moveItem(at: fileURL, to: target)
+        return FileMoveReceipt(originalURL: fileURL, movedURL: target)
     }
 
     public func undo(_ receipt: FileMoveReceipt) throws {
