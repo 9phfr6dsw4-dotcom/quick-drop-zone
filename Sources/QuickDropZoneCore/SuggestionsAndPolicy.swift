@@ -70,6 +70,24 @@ public struct DestinationSuggestion: Equatable {
     }
 }
 
+/// How a local suggestion was found, strongest first. Rules, screenshot detection and learned
+/// patterns are "sure"; wording matches alone are only a hint.
+public enum SuggestionStrength: String, Codable, Sendable {
+    case rule, screenshot, learned, wording
+
+    public var isSure: Bool { self != .wording }
+}
+
+public struct RankedSuggestion: Equatable {
+    public let suggestion: DestinationSuggestion
+    public let strength: SuggestionStrength
+
+    public init(suggestion: DestinationSuggestion, strength: SuggestionStrength) {
+        self.suggestion = suggestion
+        self.strength = strength
+    }
+}
+
 public enum SuggestionEngine {
     private static let screenshotImageExtensions: Set<String> = ["png", "jpg", "jpeg", "heic", "tif", "tiff"]
     private static let learningNoise: Set<String> = [
@@ -93,6 +111,24 @@ public enum SuggestionEngine {
         learning: [LearningRecord],
         isScreenCapture: Bool = false
     ) -> DestinationSuggestion? {
+        suggestRanked(fileName: fileName, destinations: destinations, rules: rules, learning: learning,
+                      isScreenCapture: isScreenCapture)?.suggestion
+    }
+
+    /// Folders that an enabled rule targets. Nothing else (learning, wording, Apple Intelligence)
+    /// may send a file there unless that rule itself matches.
+    public static func ruleLockedDestinationIDs(rules: [DestinationRule], destinations: [Destination]) -> Set<String> {
+        let availableIDs = Set(destinations.map(\.id))
+        return Set(rules.filter { $0.isEnabled && availableIDs.contains($0.destinationID) }.map(\.destinationID))
+    }
+
+    public static func suggestRanked(
+        fileName: String,
+        destinations: [Destination],
+        rules: [DestinationRule],
+        learning: [LearningRecord],
+        isScreenCapture: Bool = false
+    ) -> RankedSuggestion? {
         guard !destinations.isEmpty else { return nil }
         let extensionName = URL(fileURLWithPath: fileName).pathExtension.lowercased()
         let availableIDs = Set(destinations.map(\.id))
@@ -114,7 +150,9 @@ public enum SuggestionEngine {
             return extensionMatches && keywordMatches
         }
         if let matchingRule {
-            return DestinationSuggestion(destinationID: matchingRule.destinationID, reason: "Matches your \(matchingRule.name) rule")
+            return RankedSuggestion(
+                suggestion: DestinationSuggestion(destinationID: matchingRule.destinationID, reason: "Matches your \(matchingRule.name) rule"),
+                strength: .rule)
         }
 
         // A rule-targeted folder is off-limits to other heuristics when its own rule did not match.
@@ -133,11 +171,15 @@ public enum SuggestionEngine {
             guard distinctExamples.count >= 3 else { return nil }
             return (destinationID, distinctExamples.count)
         }
-        if let learnedMatch = repeatedPatterns.max(by: { $0.1 < $1.1 }) {
-            return DestinationSuggestion(
-                destinationID: learnedMatch.0,
-                reason: "Similar to files you moved before (\(learnedMatch.1) examples)"
-            )
+        if let learnedMatch = repeatedPatterns.max(by: { lhs, rhs in
+            lhs.1 == rhs.1 ? lhs.0 > rhs.0 : lhs.1 < rhs.1
+        }) {
+            return RankedSuggestion(
+                suggestion: DestinationSuggestion(
+                    destinationID: learnedMatch.0,
+                    reason: "Similar to files you moved before (\(learnedMatch.1) examples)"
+                ),
+                strength: .learned)
         }
 
         return builtInSuggestion(
@@ -177,11 +219,11 @@ public enum SuggestionEngine {
         destinations: [Destination],
         isScreenshot: Bool,
         isFilenameScreenshot: Bool
-    ) -> DestinationSuggestion? {
+    ) -> RankedSuggestion? {
         if isScreenshot,
            let destination = destinations.first(where: { words(in: $0.name).contains("screenshots") || words(in: $0.name).contains("screenshot") }) {
             let reason = isFilenameScreenshot ? "Filename matches macOS screenshot naming" : "macOS marks this as a screen capture"
-            return DestinationSuggestion(destinationID: destination.id, reason: reason)
+            return RankedSuggestion(suggestion: DestinationSuggestion(destinationID: destination.id, reason: reason), strength: .screenshot)
         }
 
         let subjectMatchers: [(Set<String>, Set<String>, Set<String>, String)] = [
@@ -193,7 +235,7 @@ public enum SuggestionEngine {
         for (extensions, filenameTerms, folderTerms, reason) in subjectMatchers
         where extensions.contains(extensionName) && !tokens.isDisjoint(with: filenameTerms) {
             if let destination = destinations.first(where: { !words(in: $0.name).isDisjoint(with: folderTerms) }) {
-                return DestinationSuggestion(destinationID: destination.id, reason: reason)
+                return RankedSuggestion(suggestion: DestinationSuggestion(destinationID: destination.id, reason: reason), strength: .wording)
             }
         }
         return nil

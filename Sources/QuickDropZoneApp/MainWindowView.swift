@@ -1,0 +1,585 @@
+import AppKit
+import QuickDropZoneCore
+import SwiftUI
+
+struct MainWindowView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        TabView(selection: $model.selectedTab) {
+            ActivityTab()
+                .tabItem { Label(MainTab.activity.title, systemImage: MainTab.activity.symbol) }
+                .tag(MainTab.activity)
+            CleanUpTab()
+                .tabItem { Label(MainTab.cleanup.title, systemImage: MainTab.cleanup.symbol) }
+                .tag(MainTab.cleanup)
+            FindTab()
+                .tabItem { Label(MainTab.find.title, systemImage: MainTab.find.symbol) }
+                .tag(MainTab.find)
+            FoldersTab()
+                .tabItem { Label(MainTab.folders.title, systemImage: MainTab.folders.symbol) }
+                .tag(MainTab.folders)
+            SettingsTab()
+                .tabItem { Label(MainTab.settings.title, systemImage: MainTab.settings.symbol) }
+                .tag(MainTab.settings)
+        }
+        .tint(QDZStyle.blue)
+        .frame(minWidth: 760, minHeight: 580)
+        .alert("Quick Drop Zone", isPresented: Binding(
+            get: { model.userError != nil },
+            set: { if !$0 { model.userError = nil } }
+        )) {
+            Button("OK", role: .cancel) { model.userError = nil }
+        } message: {
+            Text(model.userError ?? "")
+        }
+    }
+}
+
+// MARK: - Activity
+
+struct ActivityTab: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Page(title: "Activity", subtitle: "Everything Quick Drop Zone moved, renamed or suggested. Anything it did can be undone.") {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(watchSummary, systemImage: model.isWatching ? "eye" : "eye.slash")
+                    IntelligenceStatus()
+                    if let status = model.statusMessage {
+                        Caption(status)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            let waiting = model.openSuggestions
+            if !waiting.isEmpty {
+                GroupBox("Waiting for you") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Caption("New files Quick Drop Zone wasn't sure about. Nothing moves until you click.")
+                        ForEach(waiting) { entry in
+                            ActivityRow(entry: entry)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+                }
+            }
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Recent").font(.headline)
+                        Spacer()
+                        if model.lastMove != nil {
+                            Button("Undo Last Move", systemImage: "arrow.uturn.backward") { model.undoLastMove() }
+                        }
+                        Button("Clear List") { model.clearActivity() }
+                            .disabled(model.activity.allSatisfy { $0.kind == .suggested })
+                    }
+                    let recent = model.activity.filter { $0.kind != .suggested }
+                    if recent.isEmpty {
+                        Caption("Nothing yet. Drop a file on the menu-bar icon or panel, or save one to a watched folder.")
+                    } else {
+                        ForEach(recent) { entry in
+                            ActivityRow(entry: entry)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private var watchSummary: String {
+        var places: [String] = []
+        if model.watchDownloads { places.append("Downloads") }
+        if model.watchDesktop { places.append("Desktop") }
+        places += model.watchedFolders.map(\.name)
+        guard !places.isEmpty else { return "Not watching any folders. Turn watching on in Settings." }
+        let list = places.count == 1 ? places[0] : places.dropLast().joined(separator: ", ") + " and " + (places.last ?? "")
+        return "Watching \(list) for new files."
+    }
+}
+
+// MARK: - Clean up
+
+struct CleanUpTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var confirmMove = false
+    @State private var confirmTrash = false
+
+    var body: some View {
+        Page(title: "Clean Up", subtitle: "Review a folder's loose files. Nothing moves, gets renamed or goes to Trash until you approve it.") {
+            HStack(spacing: 10) {
+                Button("Clean Downloads", systemImage: "arrow.down.circle") { model.startDownloadsCleanup() }
+                Button("Choose Folder…", systemImage: "folder") { model.chooseCleanupFolder() }
+                Spacer()
+                if model.cleanupFolder != nil, model.aiReady, model.cleanupProgress == nil {
+                    Button("Ask Apple Intelligence Again", systemImage: "sparkles") {
+                        Task { await model.reviewCleanupWithAI() }
+                    }
+                }
+            }
+            if let progress = model.cleanupProgress {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Caption(progress)
+                }
+            }
+            if model.cleanupFolder == nil {
+                ContentUnavailableView("Choose a folder to clean up", systemImage: "sparkles.rectangle.stack",
+                                       description: Text("Start with Downloads, or pick any folder."))
+                    .frame(maxWidth: .infinity, minHeight: 220)
+            } else {
+                filesSection
+                groupsSection
+                trashSection
+                approveBar
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var filesSection: some View {
+        GroupBox("Files in \(model.cleanupTitle) (\(model.cleanupRows.count))") {
+            VStack(alignment: .leading, spacing: 8) {
+                if model.cleanupRows.isEmpty {
+                    Caption("No loose files to review here.")
+                } else {
+                    Caption("Checked files move to the folder shown. Renames are offered by Apple Intelligence and stay unchecked until you tick them.")
+                    ForEach(model.cleanupRows) { row in
+                        CleanupRowView(row: row)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var groupsSection: some View {
+        if !model.folderGroups.isEmpty {
+            GroupBox("Suggested new folders") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Caption("Files that belong together. Groups start unchecked; a folder is created inside \(model.cleanupTitle) only after you approve it. You can edit the name.")
+                    ForEach(model.folderGroups) { group in
+                        HStack(alignment: .top, spacing: 8) {
+                            Toggle("Include group", isOn: Binding(
+                                get: { model.selectedGroupIDs.contains(group.id) },
+                                set: { model.setFolderGroupSelected(id: group.id, selected: $0) }
+                            ))
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                            VStack(alignment: .leading, spacing: 3) {
+                                TextField("Folder name", text: Binding(
+                                    get: { group.name },
+                                    set: { model.renameFolderGroup(id: group.id, to: $0) }
+                                ))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 320)
+                                Caption(group.reason)
+                                Text(group.files.prefix(4).map(\.lastPathComponent).joined(separator: ", ") + (group.files.count > 4 ? "…" : ""))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var trashSection: some View {
+        if !model.trashRows.isEmpty {
+            GroupBox("Installers you can move to Trash") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Caption("Only .dmg files in Downloads whose app is already installed in Applications. Always unchecked; Trash can be emptied only by you.")
+                    ForEach(model.trashRows) { row in
+                        Toggle(isOn: Binding(
+                            get: { row.isSelected },
+                            set: { model.setTrashSelected(entryID: row.id, selected: $0) }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.url.lastPathComponent)
+                                Caption(row.reason)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                    Button("Move Selected to Trash (\(model.selectedTrashCount))", systemImage: "trash") { confirmTrash = true }
+                        .disabled(model.selectedTrashCount == 0)
+                        .confirmationDialog("Move the selected installers to Trash?", isPresented: $confirmTrash, titleVisibility: .visible) {
+                            Button("Move to Trash", role: .destructive) { model.moveSelectedInstallersToTrash() }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("You can restore them from Trash.")
+                        }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private var approveBar: some View {
+        HStack {
+            Caption("\(model.selectedMoveCount) to move · \(model.selectedRenameCount) to rename")
+            Spacer()
+            if model.lastMove != nil {
+                Button("Undo Last Move", systemImage: "arrow.uturn.backward") { model.undoLastMove() }
+            }
+            Button("Approve", systemImage: "checkmark.circle.fill") { confirmMove = true }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.selectedMoveCount == 0 && model.selectedRenameCount == 0)
+                .confirmationDialog("Apply the selected moves and renames?", isPresented: $confirmMove, titleVisibility: .visible) {
+                    Button("Apply") { model.moveSelectedCleanupItems() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Undo Last Move reverses all of it. Nothing is deleted.")
+                }
+        }
+    }
+}
+
+struct CleanupRowView: View {
+    @Environment(AppModel.self) private var model
+    let row: CleanupEntry
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Toggle("Move", isOn: Binding(
+                get: { row.isSelected },
+                set: { model.setCleanupSelected(entryID: row.id, selected: $0) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.checkbox)
+            .disabled(row.destinationID == nil)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.url.lastPathComponent)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Caption(row.suggestionReason ?? "No suggestion. Choose a folder.")
+                if let summary = row.summary {
+                    Caption(summary)
+                }
+                if let proposed = row.proposedName {
+                    Toggle("Rename to “\(proposed)”", isOn: Binding(
+                        get: { row.renameSelected },
+                        set: { model.setRenameSelected(entryID: row.id, selected: $0) }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .font(.caption)
+                }
+            }
+            Spacer(minLength: 6)
+            Picker("Folder", selection: Binding(
+                get: { row.destinationID ?? "" },
+                set: { model.setCleanupDestination(entryID: row.id, destinationID: $0) }
+            )) {
+                Text("Choose…").tag("")
+                ForEach(model.favoriteFolders) { folder in Text(folder.name).tag(folder.id) }
+            }
+            .labelsHidden()
+            .frame(width: 170)
+        }
+        .padding(8)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+// MARK: - Find
+
+struct FindTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+
+    var body: some View {
+        Page(title: "Find", subtitle: "Describe a file in your own words, like “the PDF from the dentist last month” or “screenshots of the EchoLedger report”.") {
+            HStack(spacing: 10) {
+                TextField("Describe the file…", text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { model.search(text) }
+                Button("Find", systemImage: "magnifyingglass") { model.search(text) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty || model.isSearching)
+            }
+            if model.isSearching {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Caption("Searching this Mac…")
+                }
+            }
+            if let note = model.searchNote {
+                Caption(note)
+            }
+            Caption(model.aiReady ? "Apple Intelligence turns your words into a search of your home folder, using the same index as Finder."
+                    : "Searching names and text for your words. Turn on Apple Intelligence for dates, file types and websites.")
+            ForEach(model.searchResults) { result in
+                SearchResultRow(result: result)
+            }
+        }
+    }
+}
+
+struct SearchResultRow: View {
+    @Environment(AppModel.self) private var model
+    let result: SearchResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: result.url.path))
+                    .resizable()
+                    .frame(width: 28, height: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(result.name)
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                }
+                Spacer()
+                Button("Open") { NSWorkspace.shared.open(result.url) }
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([result.url]) }
+                Button("What Is This?") { model.explain(result.url) }
+                    .disabled(!model.aiReady || model.explaining.contains(result.id))
+            }
+            .controlSize(.small)
+            if model.explaining.contains(result.id) {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Caption("Apple Intelligence is reading it…")
+                }
+                .padding(.leading, 38)
+            } else if let explanation = model.explanations[result.id] {
+                Caption(explanation)
+                    .padding(.leading, 38)
+            }
+        }
+        .padding(8)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var detail: String {
+        let folder = result.url.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        guard let modified = result.modified else { return folder }
+        return "\(folder) · \(modified.formatted(date: .abbreviated, time: .omitted))"
+    }
+}
+
+// MARK: - Folders and rules
+
+struct FoldersTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var editorRule: RuleDraft?
+
+    var body: some View {
+        Page(title: "Folders & Rules", subtitle: "Where files can go, and rules that always win. Apple Intelligence only ever picks from these folders.") {
+            GroupBox("Favorite folders") {
+                VStack(alignment: .leading, spacing: 8) {
+                    if model.favoriteFolders.isEmpty {
+                        Caption("No favorites yet. Add folders such as Bills, Taxes, Screenshots, Photos or Work.")
+                    }
+                    ForEach(model.favoriteFolders) { folder in
+                        HStack {
+                            Image(systemName: "folder.fill").foregroundStyle(QDZStyle.blue)
+                            Text(folder.name)
+                            Spacer()
+                            Button("Remove", role: .destructive) { model.removeFavorite(id: folder.id) }
+                                .buttonStyle(.borderless)
+                        }
+                    }
+                    Button("Add Favorite Folder…", systemImage: "folder.badge.plus") { model.addFavoriteFromPanel() }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            GroupBox("Rules") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Caption("A rule matches file types, words in the name, or both, and always wins. A folder used by a rule only gets files that match one of its rules.")
+                    ForEach(model.rules) { rule in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(rule.name)
+                                Caption(ruleSummary(rule))
+                            }
+                            Spacer()
+                            Button("Edit") { editorRule = RuleDraft(rule: rule) }
+                            Button(role: .destructive) { model.removeRule(id: rule.id) } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Remove rule \(rule.name)")
+                        }
+                    }
+                    Button("Add Rule…", systemImage: "plus") { editorRule = RuleDraft(rule: nil) }
+                        .disabled(model.favoriteFolders.isEmpty)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+        }
+        .sheet(item: $editorRule) { draft in
+            RuleEditorView(rule: draft.rule)
+                .environment(model)
+        }
+    }
+
+    private func ruleSummary(_ rule: DestinationRule) -> String {
+        let types = rule.extensions.sorted().map { ".\($0)" }.joined(separator: ", ")
+        let words = rule.keywords.joined(separator: ", ")
+        let match = [types, words].filter { !$0.isEmpty }.joined(separator: " · ")
+        return "\(match) → \(model.destinationName(for: rule.destinationID) ?? "Missing folder")"
+    }
+}
+
+struct RuleDraft: Identifiable {
+    let id = UUID()
+    let rule: DestinationRule?
+}
+
+struct RuleEditorView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    private let originalRule: DestinationRule?
+    @State private var name: String
+    @State private var extensionsText: String
+    @State private var keywordsText: String
+    @State private var destinationID: String
+
+    init(rule: DestinationRule?) {
+        originalRule = rule
+        _name = State(initialValue: rule?.name ?? "")
+        _extensionsText = State(initialValue: rule?.extensions.sorted().joined(separator: ", ") ?? "")
+        _keywordsText = State(initialValue: rule?.keywords.joined(separator: ", ") ?? "")
+        _destinationID = State(initialValue: rule?.destinationID ?? "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(originalRule == nil ? "Add Rule" : "Edit Rule")
+                .font(.title2.weight(.semibold))
+            TextField("Rule name", text: $name)
+            TextField("File types (e.g. pdf, docx)", text: $extensionsText)
+            TextField("Words in the file name (e.g. bill, invoice)", text: $keywordsText)
+            Picker("Folder", selection: $destinationID) {
+                Text("Choose…").tag("")
+                ForEach(model.favoriteFolders) { folder in Text(folder.name).tag(folder.id) }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                Button("Save Rule") {
+                    let extensions = Set(extensionsText.split(separator: ",").map {
+                        String($0).trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
+                    }.filter { !$0.isEmpty })
+                    let keywords = keywordsText.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                    model.saveRule(id: originalRule?.id, name: name, extensions: extensions, keywords: keywords, destinationID: destinationID)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isIncomplete)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+        .onAppear {
+            if destinationID.isEmpty { destinationID = model.favoriteFolders.first?.id ?? "" }
+        }
+    }
+
+    private var isIncomplete: Bool {
+        destinationID.isEmpty || (extensionsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                  && keywordsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+}
+
+// MARK: - Settings
+
+struct SettingsTab: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Page(title: "Settings", subtitle: "How much Quick Drop Zone does on its own, and what it watches.") {
+            GroupBox("Apple Intelligence") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Use Apple Intelligence on this Mac", isOn: $model.aiEnabled)
+                    Toggle("Look inside files (PDF and document text, text and objects in images)", isOn: $model.readContents)
+                        .disabled(!model.aiEnabled)
+                    IntelligenceStatus()
+                    Caption("Only Apple's on-device model is used, never a cloud service. Long numbers such as account and card numbers are hidden from it. Everything still works with this off.")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            GroupBox("Moving files") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Move files it's sure about by itself (with Undo)", isOn: $model.autoMove)
+                    Caption("Sure means: one of your rules, a macOS screenshot, a pattern from 3+ of your own moves, or Apple Intelligence certain and backed by what's inside the file or where it came from. Renames and new folders always wait for you.")
+                    Toggle("Show a notification for each automatic move or suggestion", isOn: $model.notificationsEnabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            GroupBox("Watch for new files") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Downloads", isOn: $model.watchDownloads)
+                    Toggle("Desktop (where screenshots go)", isOn: $model.watchDesktop)
+                    ForEach(model.watchedFolders) { folder in
+                        HStack {
+                            Image(systemName: "eye").foregroundStyle(QDZStyle.blue)
+                            Text(folder.name)
+                            Spacer()
+                            Button("Stop Watching") { model.removeWatchedFolder(id: folder.id) }
+                                .buttonStyle(.borderless)
+                        }
+                    }
+                    Button("Watch Another Folder…", systemImage: "plus") { model.addWatchedFolder() }
+                    Caption("Only files that arrive after watching starts are handled, once they've finished downloading. Files already there are never touched. Partial downloads and installers are left alone.")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            GroupBox("New folder suggestions") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Stepper(value: Binding(
+                        get: { model.minimumRelatedFileCount },
+                        set: { model.setMinimumRelatedFileCount($0) }
+                    ), in: FolderGroupingSettings.minimumAllowed...FolderGroupingSettings.maximumAllowed) {
+                        Text("Minimum related files: \(model.minimumRelatedFileCount)")
+                    }
+                    Caption("A new folder is only suggested when at least this many files belong together. Default: 4.")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            GroupBox("Privacy and safety") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Files, names, contents, rules and learning stay on this Mac. Quick Drop Zone has no networking and no analytics.", systemImage: "lock.shield")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Label("Nothing is ever permanently deleted. Every move and rename can be undone from Activity or Undo Last Move.", systemImage: "arrow.uturn.backward.circle")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Label("Only .dmg installers whose app is already installed can be moved to Trash, after you confirm.", systemImage: "hand.raised")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+}

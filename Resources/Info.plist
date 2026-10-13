@@ -15,13 +15,17 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.2.1</string>
+    <string>2.0.0</string>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Quick Drop Zone watches your Desktop for new files (like screenshots) and files them on this Mac.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Quick Drop Zone watches Downloads for new files, files them on this Mac, and helps clean up old ones.</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSPrincipalClass</key>
