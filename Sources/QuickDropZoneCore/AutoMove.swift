@@ -13,8 +13,9 @@ public enum AutoMoveDecision: Equatable, Sendable {
 /// Decides when Quick Drop Zone may move a file by itself.
 ///
 /// Sure: your rules, macOS screenshots, patterns learned from 3+ of your moves, and Apple
-/// Intelligence answers marked confident that are backed by more than the file name (text inside
-/// the file, what an image shows, or the website it came from) or that agree with a local hint.
+/// Intelligence answers for a folder you described, marked confident and backed by more than the
+/// file name (text inside the file, what an image shows, or the website it came from) or agreeing
+/// with a local hint.
 /// Everything else is only a suggestion. Folders reserved by a rule are never chosen by anything
 /// but that rule.
 public enum AutoMovePolicy {

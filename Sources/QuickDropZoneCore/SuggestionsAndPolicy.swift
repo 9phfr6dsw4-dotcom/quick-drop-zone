@@ -3,10 +3,21 @@ import Foundation
 public struct Destination: Codable, Equatable, Identifiable {
     public let id: String
     public var name: String
+    /// Your note on what goes in this folder. Apple Intelligence may only choose folders that have one.
+    public var purpose: String?
 
-    public init(id: String, name: String) {
+    public init(id: String, name: String, purpose: String? = nil) {
         self.id = id
         self.name = name
+        self.purpose = Self.cleanPurpose(purpose)
+    }
+
+    /// One line, at most 200 characters; nil when empty.
+    public static func cleanPurpose(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let clean = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !clean.isEmpty else { return nil }
+        return clean.count > 200 ? String(clean.prefix(200)) : clean
     }
 }
 
@@ -344,7 +355,8 @@ public enum FolderGrouping {
         }
 
         var groups: [FolderGroup] = []
-        for candidate in candidates {
+        // A shared broad word (school, research, finance…) isn't a reason for a new folder.
+        for candidate in candidates where GroupCheck.isSpecific(candidate.subject) {
             let remaining = candidate.files.filter { !usedFiles.contains($0) }
             guard remaining.count >= minimum else { continue }
             for file in remaining { usedFiles.insert(file) }

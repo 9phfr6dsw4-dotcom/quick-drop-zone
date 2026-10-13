@@ -20,25 +20,36 @@ public struct FileDecision: Equatable, Sendable {
     }
 }
 
+/// Which of your folders Apple Intelligence may choose.
+public enum AIFolders {
+    /// Folders you described ("What goes here") that no rule reserves. Folders without a note are
+    /// only for drag and drop, your rules and your own moves.
+    public static func choosable(_ destinations: [Destination], locked: Set<String>) -> [Destination] {
+        destinations.filter { !locked.contains($0.id) && Destination.cleanPurpose($0.purpose) != nil }
+    }
+}
+
 /// Turns raw model answers into safe values. Anything that doesn't fit is dropped, so a confused
 /// answer can never send a file somewhere unexpected or give it a strange name.
 public enum DecisionCheck {
-    /// The folder the model named, if it's exactly one of yours and no rule reserves it.
+    /// The folder the model named, if it's exactly one of the folders it may choose.
     public static func destination(for answer: String, destinations: [Destination], locked: Set<String>) -> Destination? {
         let clean = answer.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`“”‘’."))
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, clean.lowercased() != "none", clean.lowercased() != "unknown" else { return nil }
-        let matches = destinations.filter { $0.name.compare(clean, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
-        guard matches.count == 1, let match = matches.first, !locked.contains(match.id) else { return nil }
+        let matches = AIFolders.choosable(destinations, locked: locked)
+            .filter { $0.name.compare(clean, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+        guard matches.count == 1, let match = matches.first else { return nil }
         return match
     }
 
     public static func check(folder: String, confidence: String, reason: String, betterName: String, summary: String,
                              fileName: String, destinations: [Destination], locked: Set<String>) -> FileDecision {
-        let match = Self.destination(for: folder, destinations: destinations, locked: locked)
+        // A folder is kept only when the model is sure; a guess is no suggestion at all.
         let sure = confidence.lowercased().contains("high")
-        return FileDecision(destinationID: match?.id, isConfident: match != nil && sure,
+        let match = sure ? Self.destination(for: folder, destinations: destinations, locked: locked) : nil
+        return FileDecision(destinationID: match?.id, isConfident: match != nil,
                             reason: oneLine(reason, limit: 160, fallback: "Apple Intelligence's best match."),
                             proposedName: RenameCheck.acceptedName(original: fileName, proposed: betterName),
                             summary: oneLine(summary, limit: 300, fallback: ""))
@@ -91,6 +102,29 @@ public struct FolderGroupProposal: Equatable, Sendable {
 }
 
 public enum GroupCheck {
+    /// Words that only name a broad category. A group name made only of these (and numbers) is too
+    /// general: groups must be one specific project, trip, class, event or case.
+    static let broadWords: Set<String> = [
+        "school", "schoolwork", "class", "classes", "course", "courses", "college", "university", "homework", "study", "studies",
+        "research", "paper", "papers", "essay", "essays", "academic", "academics", "education",
+        "finance", "finances", "financial", "money", "bank", "banking", "budget", "statement", "statements", "bill", "bills",
+        "invoice", "invoices", "receipt", "receipts", "tax", "taxes", "payment", "payments", "expense", "expenses",
+        "work", "job", "jobs", "business", "office", "personal", "private", "home", "family", "health", "medical", "legal",
+        "travel", "shopping", "misc", "miscellaneous", "other", "others", "random", "stuff", "things", "general", "various",
+        "mixed", "important", "old", "new", "archive", "archives", "backup", "backups", "document", "documents", "docs", "doc",
+        "file", "files", "folder", "folders", "record", "records", "note", "notes", "data", "report", "reports", "form", "forms",
+        "project", "projects", "image", "images", "photo", "photos", "picture", "pictures", "pics", "screenshot", "screenshots",
+        "video", "videos", "audio", "music", "media", "pdf", "pdfs", "spreadsheet", "spreadsheets", "csv", "csvs", "text",
+        "download", "downloads", "and", "the", "of", "for", "my", "to", "in", "from", "a", "an"
+    ]
+
+    /// True when the name says something specific, like Denver trip or Biology 101 lab, rather than
+    /// a category like School stuff or Financial documents.
+    public static func isSpecific(_ name: String) -> Bool {
+        let words = name.lowercased().components(separatedBy: CharacterSet.letters.inverted).filter { $0.count >= 2 }
+        return words.contains { !broadWords.contains($0) }
+    }
+
     public static func validFolderName(_ value: String) -> String? {
         let name = TextTools.collapseWhitespace(value).trimmingCharacters(in: CharacterSet(charactersIn: " ."))
         guard (2...40).contains(name.count), name != ".", name != "..", name.filter(\.isLetter).count >= 2,
@@ -98,15 +132,15 @@ public enum GroupCheck {
         return name
     }
 
-    /// Keeps only groups with a valid name and at least `minimumSize` files. File numbers from the
-    /// model start at 1; each file can be in one group only (the first one that claims it), unknown
-    /// numbers are ignored, and two groups can't share a name. At most 8 groups.
+    /// Keeps only groups with a valid, specific name and at least `minimumSize` files. File numbers
+    /// from the model start at 1; each file can be in one group only (the first one that claims it),
+    /// unknown numbers are ignored, and two groups can't share a name. At most 8 groups.
     public static func validate(_ groups: [(name: String, members: [Int])], fileCount: Int, minimumSize: Int) -> [FolderGroupProposal] {
         var used: Set<Int> = []
         var names: Set<String> = []
         var result: [FolderGroupProposal] = []
         for group in groups {
-            guard result.count < 8, let name = validFolderName(group.name), !names.contains(name.lowercased()) else { continue }
+            guard result.count < 8, let name = validFolderName(group.name), isSpecific(name), !names.contains(name.lowercased()) else { continue }
             var indexes: [Int] = []
             for member in group.members where member >= 1 && member <= fileCount {
                 let index = member - 1
@@ -121,14 +155,15 @@ public enum GroupCheck {
     }
 }
 
-/// The prompt for one file: its facts, your folders, and how you filed similar files before.
+/// The prompt for one file: its facts, the folders you described, and how you filed similar files before.
 public enum DecisionPrompt {
     public static func examples(learning: [LearningRecord], destinations: [Destination], locked: Set<String>, limit: Int = 8) -> [String] {
+        let allowed = AIFolders.choosable(destinations, locked: locked)
         var seen: Set<String> = []
         var lines: [String] = []
         for record in learning.sorted(by: { $0.updatedAt > $1.updatedAt }) {
-            guard lines.count < limit, let sample = record.sampleName, !locked.contains(record.destinationID),
-                  let folder = destinations.first(where: { $0.id == record.destinationID }) else { continue }
+            guard lines.count < limit, let sample = record.sampleName,
+                  let folder = allowed.first(where: { $0.id == record.destinationID }) else { continue }
             let key = sample.lowercased()
             guard !seen.contains(key) else { continue }
             seen.insert(key)
@@ -138,14 +173,20 @@ public enum DecisionPrompt {
     }
 
     public static func make(facts: FileFacts, destinations: [Destination], locked: Set<String>, examples: [String]) -> String {
-        let allowed = destinations.filter { !locked.contains($0.id) }.map(\.name)
-        var lines = ["Decide where this file belongs.", facts.promptText()]
-        lines.append("Folders you may choose (exact names): \(allowed.joined(separator: " | "))")
-        if !examples.isEmpty {
-            lines.append("How this person filed files before:")
-            lines += examples.map { "- " + $0 }
+        let allowed = AIFolders.choosable(destinations, locked: locked)
+        var lines = ["Decide whether this file belongs in one of the person's folders.", facts.promptText()]
+        if allowed.isEmpty {
+            lines.append("There are no folders to choose from. Answer none for the folder.")
+        } else {
+            lines.append("Folders you may choose (exact name: what goes there):")
+            lines += allowed.map { "- \($0.name): \(Destination.cleanPurpose($0.purpose) ?? "")" }
+            if !examples.isEmpty {
+                lines.append("How this person filed files before:")
+                lines += examples.map { "- " + $0 }
+            }
+            lines.append("Choose a folder only if this file is plainly what that folder's description says. Being about a similar "
+                         + "subject is not enough. Most files fit no folder: then answer none.")
         }
-        lines.append("Answer none for the folder if no folder clearly fits.")
         return lines.joined(separator: "\n")
     }
 }

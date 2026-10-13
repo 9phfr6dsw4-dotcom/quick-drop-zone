@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 APP="dist/Quick Drop Zone.app"
 ICONSET="dist/AppIcon.iconset"
 VERIFY_DIR="dist/verify-extracted"
-ZIP="dist/Quick-Drop-Zone-2.0.0.zip"
+ZIP="dist/Quick-Drop-Zone-2.1.0.zip"
 
 swift build -c release --product QuickDropZone
 rm -rf "$APP" "$ICONSET" "$VERIFY_DIR" "$ZIP"
@@ -20,11 +20,21 @@ cp Resources/AppIcon-1024.png "$APP/Contents/Resources/AppIcon-1024.png"
 python3 Scripts/test_icon_package.py "$ROOT_DIR/Resources/AppIcon-1024.png" "$ROOT_DIR/$APP"
 chmod 755 "$APP/Contents/MacOS/QuickDropZone"
 
+# Each check names the key that doesn't match, so a failure is never silent.
+expect_plist() {
+    local actual
+    actual="$(/usr/libexec/PlistBuddy -c "Print :$1" "$APP/Contents/Info.plist")"
+    if [ "$actual" != "$2" ]; then
+        echo "error: Info.plist $1 is '$actual', expected '$2'" >&2
+        exit 1
+    fi
+}
+
 plutil -lint "$APP/Contents/Info.plist"
-test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$APP/Contents/Info.plist")" = "true"
-test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")" = "26.0"
-test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")" = "2.0.0"
-test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")" = "3"
+expect_plist LSUIElement true
+expect_plist LSMinimumSystemVersion 26.0
+expect_plist CFBundleShortVersionString 2.1.0
+expect_plist CFBundleVersion 4
 test -s "$APP/Contents/Resources/AppIcon.icns"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"

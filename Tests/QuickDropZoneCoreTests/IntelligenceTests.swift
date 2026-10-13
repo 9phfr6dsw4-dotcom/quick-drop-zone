@@ -6,10 +6,11 @@ import XCTest
 /// stand-in answers.
 final class IntelligenceTests: XCTestCase {
     private let folders = [
-        Destination(id: "bills", name: "Bills"),
-        Destination(id: "taxes", name: "Taxes"),
-        Destination(id: "shots", name: "Screenshots"),
-        Destination(id: "work", name: "Work Projects")
+        Destination(id: "bills", name: "Bills", purpose: "Utility and phone bills"),
+        Destination(id: "taxes", name: "Taxes", purpose: "  IRS forms\n and tax returns "),
+        Destination(id: "shots", name: "Screenshots", purpose: "Screenshots"),
+        Destination(id: "work", name: "Work Projects", purpose: "Client project files"),
+        Destination(id: "csv", name: "CSV", purpose: "   ")
     ]
 
     func testFolderAnswerMustBeExactlyOneOfYourFolders() {
@@ -20,6 +21,25 @@ final class IntelligenceTests: XCTestCase {
         XCTAssertNil(DecisionCheck.destination(for: "Bills, Taxes", destinations: folders, locked: []))
         // A folder a rule reserves can't be chosen by Apple Intelligence.
         XCTAssertNil(DecisionCheck.destination(for: "Bills", destinations: folders, locked: ["bills"]))
+        // A folder without a note is never chosen by Apple Intelligence.
+        XCTAssertNil(DecisionCheck.destination(for: "CSV", destinations: folders, locked: []))
+    }
+
+    func testOnlyDescribedFoldersCanBeChosen() {
+        XCTAssertEqual(folders[1].purpose, "IRS forms and tax returns")
+        XCTAssertNil(folders[4].purpose)
+        XCTAssertNil(Destination.cleanPurpose(nil))
+        XCTAssertEqual(Destination.cleanPurpose(String(repeating: "a", count: 250))?.count, 200)
+        XCTAssertEqual(AIFolders.choosable(folders, locked: ["shots"]).map(\.id), ["bills", "taxes", "work"])
+        let undescribed = [Destination(id: "school", name: "School"), Destination(id: "csv", name: "CSV")]
+        XCTAssertEqual(AIFolders.choosable(undescribed, locked: []), [])
+        let paper = DecisionCheck.check(folder: "School", confidence: "high", reason: "A research paper.", betterName: "", summary: "",
+                                        fileName: "paper.pdf", destinations: undescribed, locked: [])
+        XCTAssertNil(paper.destinationID)
+        XCTAssertFalse(paper.isConfident)
+        let prompt = DecisionPrompt.make(facts: FileFacts(fileName: "paper.pdf"), destinations: undescribed, locked: [], examples: [])
+        XCTAssertTrue(prompt.contains("There are no folders to choose from. Answer none for the folder."))
+        XCTAssertFalse(prompt.contains("School"))
     }
 
     func testDecisionIsConfidentOnlyWithAFolderAndHighConfidence() {
@@ -31,6 +51,8 @@ final class IntelligenceTests: XCTestCase {
         XCTAssertEqual(sure.proposedName, "2025 tax return.pdf")
         let unsure = DecisionCheck.check(folder: "Taxes", confidence: "low", reason: "", betterName: "", summary: "",
                                          fileName: "a.pdf", destinations: folders, locked: [])
+        // A guess is not a suggestion.
+        XCTAssertNil(unsure.destinationID)
         XCTAssertFalse(unsure.isConfident)
         XCTAssertEqual(unsure.reason, "Apple Intelligence's best match.")
         XCTAssertNil(unsure.proposedName)
@@ -69,6 +91,19 @@ final class IntelligenceTests: XCTestCase {
         ], fileCount: 8, minimumSize: 3)
         XCTAssertEqual(groups, [FolderGroupProposal(name: "Kitchen remodel", indexes: [0, 1, 2]),
                                 FolderGroupProposal(name: "Trip to Denver", indexes: [3, 4, 5])])
+        // Broad category names are turned down even when the files would otherwise qualify.
+        let broadGroups = GroupCheck.validate([
+            (name: "School stuff", members: [1, 2, 3]),
+            (name: "Financial Documents 2025", members: [1, 2, 3]),
+            (name: "Biology 101 lab", members: [1, 2, 3])
+        ], fileCount: 3, minimumSize: 3)
+        XCTAssertEqual(broadGroups, [FolderGroupProposal(name: "Biology 101 lab", indexes: [0, 1, 2])])
+        for broad in ["School", "Research papers", "CSV files", "Tax Docs", "Bank statements 2025", "Work", "Misc."] {
+            XCTAssertFalse(GroupCheck.isSpecific(broad), broad)
+        }
+        for specific in ["Denver trip 2026", "Biology 101 lab", "Kitchen remodel", "Chase statements", "Lease renewal"] {
+            XCTAssertTrue(GroupCheck.isSpecific(specific), specific)
+        }
         XCTAssertEqual(GroupCheck.validFolderName("  Tax   Docs. "), "Tax Docs")
         XCTAssertNil(GroupCheck.validFolderName(".."))
         XCTAssertNil(GroupCheck.validFolderName("a:b"))
@@ -119,12 +154,20 @@ final class IntelligenceTests: XCTestCase {
             LearningRecord(fileExtension: "png", tokens: [], destinationID: "shots", updatedAt: now.addingTimeInterval(5), sampleName: "Shot 123456.png"),
             LearningRecord(fileExtension: "pdf", tokens: [], destinationID: "gone", updatedAt: now, sampleName: "old.pdf")
         ]
-        let examples = DecisionPrompt.examples(learning: learning, destinations: folders, locked: ["shots"])
+        let csvExample = LearningRecord(fileExtension: "csv", tokens: [], destinationID: "csv", updatedAt: now.addingTimeInterval(20),
+                                        sampleName: "export.csv")
+        let examples = DecisionPrompt.examples(learning: learning + [csvExample], destinations: folders, locked: ["shots"])
         XCTAssertEqual(examples, ["“W2 2025.pdf” → Taxes", "“Comcast 0042.pdf” → Bills"])
         let prompt = DecisionPrompt.make(facts: FileFacts(fileName: "a.pdf"), destinations: folders, locked: ["shots"], examples: examples)
-        XCTAssertTrue(prompt.contains("Folders you may choose (exact names): Bills | Taxes | Work Projects"))
+        XCTAssertTrue(prompt.contains("""
+            Folders you may choose (exact name: what goes there):
+            - Bills: Utility and phone bills
+            - Taxes: IRS forms and tax returns
+            - Work Projects: Client project files
+            """))
         XCTAssertTrue(prompt.contains("- “W2 2025.pdf” → Taxes"))
         XCTAssertFalse(prompt.contains("Screenshots"))
+        XCTAssertFalse(prompt.contains("CSV"))
     }
 }
 
