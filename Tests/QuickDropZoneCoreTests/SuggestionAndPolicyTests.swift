@@ -252,6 +252,9 @@ final class SuggestionAndPolicyTests: XCTestCase {
 
         let groups = FolderGrouping.suggest(for: related + unrelated, minimumGroupSize: 2)
         XCTAssertEqual(groups.map(\.name), ["Acme", "Contoso", "Northstar"])
+        let broad = ["School essay draft.pdf", "School lab sheet.pdf", "Research school notes.pdf", "School research outline.pdf"]
+            .map { root.appendingPathComponent($0) }
+        XCTAssertEqual(FolderGrouping.suggest(for: broad, minimumGroupSize: 2), [])
         XCTAssertEqual(groups.first?.files.count, 3)
         XCTAssertTrue(groups[0].files.allSatisfy { related.contains($0) })
         XCTAssertFalse(groups.map(\.name).contains("Project"))

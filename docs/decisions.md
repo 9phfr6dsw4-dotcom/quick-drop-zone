@@ -20,7 +20,9 @@
 - Enforce a user's rule exactly, especially file-type conditions; a rule-constrained folder does not receive unrelated fallback suggestions.
 - Prefer specific evidence over broad similarity. Screenshot identification uses macOS screen-capture metadata, with a `Screenshot… .png` filename as backup. Include a short reason for each suggestion; show no destination when confidence is weak.
 - Learning needs repeated, distinct examples with a meaningful shared subject; only the person's own moves and approvals are learned, never the model's automatic moves. AI cannot override rules, choose a folder reserved by a rule, or send data off-device; answers that don't name exactly one existing folder are dropped.
-- Suggest new folders only for files with a specific shared subject or project, with a configurable minimum of four related files by default—not generic file types or dates alone. Let the user edit the name and approve before creating the folder.
+- Favorite folders are specific save targets, not broad categories. Apple Intelligence may only choose a folder the person described with a "What goes here" note, must match that note (topic similarity is not enough), and its folder is kept only when it answers with high confidence; guesses are not shown. Folders without a note get files only from drag and drop, rules and the person's own learned moves.
+- Suggest new folders only for files about one specific, named thing (a client, trip, class project or event), with a configurable minimum of four related files by default—never broad categories such as school, finance, research or documents, and not generic file types or dates alone. Apple Intelligence's group proposals are off by default and need at least four files. Let the user edit the name and approve before creating the folder.
+- In Clean Up, only sure local matches (rules, screenshots, learned patterns) start checked; wording-only matches are shown as unchecked guesses.
 
 ## Build and distribution
 

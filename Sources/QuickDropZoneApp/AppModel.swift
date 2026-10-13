@@ -7,6 +7,8 @@ struct FavoriteFolder: Codable, Equatable, Identifiable {
     var id: String
     var name: String
     var bookmarkData: Data
+    /// "What goes here". Apple Intelligence only suggests folders that have one.
+    var purpose: String?
 }
 
 struct CleanupEntry: Identifiable {
@@ -77,6 +79,7 @@ final class AppModel {
     private var storedNotifications: Bool
     private var storedWatchDownloads: Bool
     private var storedWatchDesktop: Bool
+    private var storedAIGroups: Bool
 
     var aiEnabled: Bool {
         get { storedAIEnabled }
@@ -102,6 +105,11 @@ final class AppModel {
         get { storedWatchDesktop }
         set { storedWatchDesktop = newValue; defaults.set(newValue, forKey: Keys.watchDesktop); restartWatching() }
     }
+    /// Apple Intelligence's new-folder suggestions in Clean Up. Off unless you turn it on.
+    var aiGroupsEnabled: Bool {
+        get { storedAIGroups }
+        set { storedAIGroups = newValue; defaults.set(newValue, forKey: Keys.aiGroups); if !newValue { aiGroups = []; refreshFolderGroups() } }
+    }
 
     enum Keys {
         static let folders = "QuickDropZone.favoriteFolders.v1"
@@ -116,6 +124,7 @@ final class AppModel {
         static let notifications = "QuickDropZone.notifications"
         static let watchDownloads = "QuickDropZone.watch.downloads"
         static let watchDesktop = "QuickDropZone.watch.desktop"
+        static let aiGroups = "QuickDropZone.ai.groups"
         static let hasLaunched = "QuickDropZone.hasLaunched.v2"
     }
 
@@ -145,6 +154,7 @@ final class AppModel {
         storedNotifications = flag(Keys.notifications)
         storedWatchDownloads = flag(Keys.watchDownloads)
         storedWatchDesktop = flag(Keys.watchDesktop)
+        storedAIGroups = defaults.object(forKey: Keys.aiGroups) as? Bool ?? false
         minimumRelatedFileCount = groupingSettings.minimumRelatedFiles
         favoriteFolders = Self.decode([FavoriteFolder].self, key: Keys.folders, defaults: defaults) ?? []
         rules = Self.decode([DestinationRule].self, key: Keys.rules, defaults: defaults) ?? []
@@ -160,8 +170,16 @@ final class AppModel {
     }
 
     var destinations: [Destination] {
-        favoriteFolders.map { Destination(id: $0.id, name: $0.name) }
+        favoriteFolders.map { Destination(id: $0.id, name: $0.name, purpose: $0.purpose) }
     }
+
+    /// True when Apple Intelligence has at least one described folder it may choose.
+    var hasDescribedFolders: Bool {
+        !AIFolders.choosable(destinations, locked: lockedDestinationIDs).isEmpty
+    }
+
+    /// AI-proposed new folders need at least 4 files, or more if you set a higher minimum.
+    var aiGroupMinimum: Int { max(4, minimumRelatedFileCount) }
 
     var lockedDestinationIDs: Set<String> {
         SuggestionEngine.ruleLockedDestinationIDs(rules: rules, destinations: destinations)
@@ -212,6 +230,12 @@ final class AppModel {
         } catch {
             userError = "Could not save that folder bookmark: \(error.localizedDescription)"
         }
+    }
+
+    func setFolderPurpose(id: String, to text: String) {
+        guard let index = favoriteFolders.firstIndex(where: { $0.id == id }) else { return }
+        favoriteFolders[index].purpose = text.isEmpty ? nil : String(text.prefix(200))
+        persist(favoriteFolders, key: Keys.folders)
     }
 
     func removeFavorite(id: String) {
@@ -472,8 +496,10 @@ final class AppModel {
         return Evaluation(decision: decision, ai: answer)
     }
 
+    /// Apple Intelligence's answer: a folder only when it's sure about one you described, plus a
+    /// clearer name and a summary (those work even without any described folder).
     private func askModel(facts: FileFacts) async -> FileDecision? {
-        guard aiReady, !destinations.isEmpty else { return nil }
+        guard aiReady else { return nil }
         let locked = lockedDestinationIDs
         let examples = DecisionPrompt.examples(learning: learning, destinations: destinations, locked: locked)
         let prompt = DecisionPrompt.make(facts: facts, destinations: destinations, locked: locked, examples: examples)
@@ -493,8 +519,6 @@ final class AppModel {
             explaining.remove(key)
             if let summary = answer?.summary, !summary.isEmpty {
                 explanations[key] = summary
-            } else if destinations.isEmpty {
-                explanations[key] = "Add a favorite folder first; Apple Intelligence describes files while deciding where they go."
             } else {
                 explanations[key] = "Apple Intelligence couldn't tell what this file is."
             }
@@ -801,18 +825,19 @@ final class AppModel {
                     continue
                 }
 
-                let suggestion = SuggestionEngine.suggest(
+                let ranked = SuggestionEngine.suggestRanked(
                     fileName: url.lastPathComponent,
                     destinations: destinations,
                     rules: rules,
                     learning: learning,
                     isScreenCapture: ScreenshotMetadata.isScreenCapture(at: url)
                 )
+                // Rules, screenshots and your own repeated moves start checked; a wording match is only a hint.
                 cleanupRows.append(CleanupEntry(
                     url: url,
-                    destinationID: suggestion?.destinationID,
-                    suggestionReason: suggestion?.reason,
-                    isSelected: suggestion != nil
+                    destinationID: ranked?.suggestion.destinationID,
+                    suggestionReason: ranked.map { $0.strength.isSure ? $0.suggestion.reason : $0.suggestion.reason + " (a guess; check it)" },
+                    isSelected: ranked?.strength.isSure == true
                 ))
             }
             cleanupRows.sort { $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending }
@@ -824,8 +849,9 @@ final class AppModel {
         }
     }
 
-    /// Apple Intelligence looks at the files the local rules couldn't place (up to 40): suggests a
-    /// folder (pre-checked only when it's sure), a clearer name (unchecked), and new-folder groups.
+    /// Apple Intelligence looks at the files the local rules couldn't place (up to 40). It suggests one
+    /// of your described folders only when it's sure, a clearer name (unchecked), and, when you've
+    /// turned them on, specific new-folder groups.
     func reviewCleanupWithAI() async {
         guard aiReady, cleanupProgress == nil, let folder = cleanupFolder else { return }
         let candidates = Array(cleanupRows.filter { $0.destinationID == nil }.prefix(40))
@@ -837,22 +863,24 @@ final class AppModel {
             factsByPath[row.id] = facts
             guard let decision = await askModel(facts: facts),
                   let index = cleanupRows.firstIndex(where: { $0.id == row.id }), cleanupRows[index].destinationID == nil else { continue }
-            if let destinationID = decision.destinationID {
+            if let destinationID = decision.destinationID, decision.isConfident {
                 cleanupRows[index].destinationID = destinationID
                 cleanupRows[index].suggestionReason = "Apple Intelligence: \(decision.reason)"
-                cleanupRows[index].isSelected = decision.isConfident
+                cleanupRows[index].isSelected = true
             }
             cleanupRows[index].proposedName = decision.proposedName
             cleanupRows[index].summary = decision.summary.isEmpty ? nil : decision.summary
         }
-        cleanupProgress = "Apple Intelligence is looking for files that belong together…"
-        await groupWithAI(factsByPath: factsByPath, folder: folder)
+        if aiGroupsEnabled {
+            cleanupProgress = "Apple Intelligence is looking for files that belong together…"
+            await groupWithAI(factsByPath: factsByPath, folder: folder)
+        }
         cleanupProgress = nil
     }
 
     private func groupWithAI(factsByPath: [String: FileFacts], folder: URL) async {
         let unassigned = cleanupRows.filter { $0.destinationID == nil }.map(\.url)
-        guard unassigned.count >= minimumRelatedFileCount, cleanupFolder == folder else {
+        guard unassigned.count >= aiGroupMinimum, cleanupFolder == folder else {
             refreshFolderGroups()
             return
         }
@@ -867,10 +895,12 @@ final class AppModel {
             lines.append(line)
         }
         let prompt = "Files:\n" + lines.joined(separator: "\n")
-            + "\n\nGroup files that clearly belong to the same project, trip, event or subject. Each group needs at least \(minimumRelatedFileCount) files."
+            + "\n\nGroup only files that belong to one specific, named thing: one trip, one class or course project, one event, "
+            + "one move, one case. Never group by a broad category like school, finance, work, documents or receipts, and never "
+            + "by file type or date. Each group needs at least \(aiGroupMinimum) files. Most files belong to no group; leave them out."
         if let answer = try? await OnDeviceModel.groups(prompt), cleanupFolder == folder {
             let checked = GroupCheck.validate(answer.map { (name: $0.name, members: $0.files) }, fileCount: files.count,
-                                              minimumSize: minimumRelatedFileCount)
+                                              minimumSize: aiGroupMinimum)
             aiGroups = checked.map { proposal in
                 let members = proposal.indexes.map { files[$0] }
                 return FolderGroup(id: "ai-" + proposal.name.lowercased(), name: proposal.name,
@@ -884,9 +914,9 @@ final class AppModel {
         let unassigned = Set(cleanupRows.filter { $0.destinationID == nil }.map(\.url))
         var groups: [FolderGroup] = []
         var used: Set<URL> = []
-        for group in aiGroups {
+        for group in aiGroups where aiGroupsEnabled {
             let files = group.files.filter { unassigned.contains($0) && !used.contains($0) }
-            guard files.count >= minimumRelatedFileCount else { continue }
+            guard files.count >= aiGroupMinimum else { continue }
             used.formUnion(files)
             groups.append(FolderGroup(id: group.id, name: group.name, reason: group.reason, files: files))
         }

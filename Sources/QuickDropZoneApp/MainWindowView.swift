@@ -130,6 +130,9 @@ struct CleanUpTab: View {
                     Caption(progress)
                 }
             }
+            if model.aiReady, !model.hasDescribedFolders, !model.favoriteFolders.isEmpty {
+                Caption("Apple Intelligence won't suggest any of your folders until you add a note saying what goes in one (Folders & Rules). It still offers clearer names.")
+            }
             if model.cleanupFolder == nil {
                 ContentUnavailableView("Choose a folder to clean up", systemImage: "sparkles.rectangle.stack",
                                        description: Text("Start with Downloads, or pick any folder."))
@@ -388,20 +391,36 @@ struct FoldersTab: View {
     @State private var editorRule: RuleDraft?
 
     var body: some View {
-        Page(title: "Folders & Rules", subtitle: "Where files can go, and rules that always win. Apple Intelligence only ever picks from these folders.") {
+        Page(title: "Folders & Rules", subtitle: "Where files can go, and rules that always win. Apple Intelligence only suggests folders you describe.") {
             GroupBox("Favorite folders") {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     if model.favoriteFolders.isEmpty {
-                        Caption("No favorites yet. Add folders such as Bills, Taxes, Screenshots, Photos or Work.")
+                        Caption("No favorites yet. Add the folders you save files to.")
+                    } else {
+                        Caption("Every favorite is a place to drop files. Apple Intelligence only suggests a folder that has a note saying what goes there, and only for files that plainly match it. Leave the note empty to keep a folder for drag and drop, your rules and your own moves.")
                     }
                     ForEach(model.favoriteFolders) { folder in
-                        HStack {
-                            Image(systemName: "folder.fill").foregroundStyle(QDZStyle.blue)
-                            Text(folder.name)
-                            Spacer()
-                            Button("Remove", role: .destructive) { model.removeFavorite(id: folder.id) }
-                                .buttonStyle(.borderless)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: "folder.fill").foregroundStyle(QDZStyle.blue)
+                                Text(folder.name)
+                                    .font(.callout.weight(.medium))
+                                Spacer()
+                                Button("Remove", role: .destructive) { model.removeFavorite(id: folder.id) }
+                                    .buttonStyle(.borderless)
+                            }
+                            TextField("What goes here? (optional, e.g. Chase statement CSV exports only)", text: Binding(
+                                get: { folder.purpose ?? "" },
+                                set: { model.setFolderPurpose(id: folder.id, to: $0) }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                            .padding(.leading, 26)
+                            Caption(folder.purpose?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                                    ? "Apple Intelligence may suggest this folder for files that match the note."
+                                    : "Drag and drop, rules and your own moves only.")
+                                .padding(.leading, 26)
                         }
+                        .padding(.vertical, 2)
                     }
                     Button("Add Favorite Folder…", systemImage: "folder.badge.plus") { model.addFavoriteFromPanel() }
                 }
@@ -530,7 +549,7 @@ struct SettingsTab: View {
             GroupBox("Moving files") {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Move files it's sure about by itself (with Undo)", isOn: $model.autoMove)
-                    Caption("Sure means: one of your rules, a macOS screenshot, a pattern from 3+ of your own moves, or Apple Intelligence certain and backed by what's inside the file or where it came from. Renames and new folders always wait for you.")
+                    Caption("Sure means: one of your rules, a macOS screenshot, a pattern from 3+ of your own moves, or Apple Intelligence certain about a folder you described and backed by what's inside the file or where it came from. Renames and new folders always wait for you.")
                     Toggle("Show a notification for each automatic move or suggestion", isOn: $model.notificationsEnabled)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -563,7 +582,10 @@ struct SettingsTab: View {
                     ), in: FolderGroupingSettings.minimumAllowed...FolderGroupingSettings.maximumAllowed) {
                         Text("Minimum related files: \(model.minimumRelatedFileCount)")
                     }
-                    Caption("A new folder is only suggested when at least this many files belong together. Default: 4.")
+                    Caption("A new folder is only suggested when at least this many files share a specific name (like a client or trip), never a broad word like school or finance. Default: 4.")
+                    Toggle("Let Apple Intelligence suggest new folders for related files", isOn: $model.aiGroupsEnabled)
+                        .disabled(!model.aiEnabled)
+                    Caption("Off by default. When on, only for one specific project, trip, class or event with at least \(model.aiGroupMinimum) files. Suggestions always start unchecked.")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 4)
