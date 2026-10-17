@@ -8,7 +8,7 @@ APP="dist/Quick Drop Zone.app"
 ICONSET="dist/AppIcon.iconset"
 ICON_OUT="dist/AppIcon-compiled"
 VERIFY_DIR="dist/verify-extracted"
-ZIP="dist/Quick-Drop-Zone-2.3.0.zip"
+ZIP="dist/Quick-Drop-Zone-2.4.0.zip"
 
 swift build -c release --product QuickDropZone
 rm -rf "$APP" "$ICONSET" "$ICON_OUT" "$VERIFY_DIR" "$ZIP" "$ZIP.sha256"
@@ -64,8 +64,8 @@ expect_plist() {
 plutil -lint "$APP/Contents/Info.plist"
 expect_plist LSUIElement true
 expect_plist LSMinimumSystemVersion 26.0
-expect_plist CFBundleShortVersionString 2.3.0
-expect_plist CFBundleVersion 6
+expect_plist CFBundleShortVersionString 2.4.0
+expect_plist CFBundleVersion 7
 expect_plist CFBundleIconFile AppIcon
 expect_plist CFBundleIconName AppIcon
 test -s "$APP/Contents/Resources/AppIcon.icns"
@@ -92,7 +92,7 @@ expect_plist_in() {
         exit 1
     fi
 }
-expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.3.0
+expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.4.0
 expect_plist_in "$EXTRACTED_APP" CFBundleIconName AppIcon
 plutil -lint "$EXTRACTED_APP/Contents/Info.plist"
 codesign --verify --deep --strict "$EXTRACTED_APP"

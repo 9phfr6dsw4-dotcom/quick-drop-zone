@@ -163,15 +163,22 @@ extension ButtonStyle where Self == BrassButtonStyle {
 struct Chip: View {
     let text: String
     var highlighted = false
+    var symbol: String? = nil
 
     var body: some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(highlighted ? QDZStyle.brass : Color.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(highlighted ? QDZStyle.brass.opacity(0.14) : Color.white.opacity(0.08), in: Capsule())
-            .lineLimit(1)
+        HStack(spacing: 4) {
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: 9.5, weight: .medium))
+            }
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+        }
+        .foregroundStyle(highlighted ? QDZStyle.brass : Color.secondary)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 3.5)
+        .background(highlighted ? QDZStyle.brass.opacity(0.14) : Color.white.opacity(0.08), in: Capsule())
     }
 }
 
@@ -192,43 +199,106 @@ struct SectionLabel: View {
     }
 }
 
-struct PageHeader: View {
+struct PageHeader<Accessory: View>: View {
     let title: String
     let subtitle: String
+    let accessory: Accessory
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 30, weight: .semibold))
-                .tracking(-0.4)
-            TickRule()
-            Text(subtitle)
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 28, weight: .bold))
+                    .tracking(-0.4)
+                TickRule()
+                Text(subtitle)
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            accessory
+                .padding(.top, 6)
         }
     }
 }
 
-/// A scrolling page: large title, subtitle, content, privacy footer.
-struct Page<Content: View>: View {
+/// A scrolling page: large title, subtitle (with optional buttons on the right), content, privacy footer.
+struct Page<Accessory: View, Content: View>: View {
     let title: String
     let subtitle: String
-    @ViewBuilder let content: () -> Content
+    let accessory: Accessory
+    let content: Content
+
+    init(title: String, subtitle: String, @ViewBuilder accessory: () -> Accessory, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.accessory = accessory()
+        self.content = content()
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                PageHeader(title: title, subtitle: subtitle)
-                content()
+                PageHeader(title: title, subtitle: subtitle, accessory: accessory)
+                content
                 PrivacyFooter()
             }
             .padding(.horizontal, 28)
-            .padding(.top, 42)
+            .padding(.top, 24)
             .padding(.bottom, 28)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(WindowBackground().ignoresSafeArea())
+    }
+}
+
+extension Page where Accessory == EmptyView {
+    init(title: String, subtitle: String, @ViewBuilder content: () -> Content) {
+        self.init(title: title, subtitle: subtitle, accessory: { EmptyView() }, content: content)
+    }
+}
+
+/// "TODAY", "YESTERDAY": the small heading above a day's entries.
+struct DayLabel: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .textCase(.uppercase)
+            .tracking(1.3)
+            .foregroundStyle(.secondary)
+    }
+}
+
+/// A small action with an icon above its caption (Undo, Rename, Finder).
+struct IconAction: View {
+    let title: String
+    let symbol: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .regular))
+                Text(title)
+                    .font(.system(size: 11))
+            }
+            .foregroundStyle(hovering ? QDZStyle.brass : Color.secondary)
+            .frame(minWidth: 40)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+        .accessibilityLabel(title)
     }
 }
 
@@ -299,38 +369,13 @@ struct ActivityRow: View {
     var compact = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 10) {
-                leadingIcon
-                if compact {
-                    compactHeader
-                } else {
-                    fullHeader
-                }
-                Spacer(minLength: 6)
-                Text(TimeText.relative(entry.date))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+        Group {
+            if compact {
+                compactBody
+            } else {
+                fullBody
             }
-            if !compact {
-                Text(entry.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 32)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if !compact, let summary = entry.summary, !summary.isEmpty {
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 32)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            buttons
-                .padding(.leading, 32)
-                .buttonStyle(.pill)
         }
-        .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface(radius: 13, hovering: hovering)
         .opacity(entry.isUndone ? 0.6 : 1)
@@ -338,13 +383,132 @@ struct ActivityRow: View {
         .animation(.easeOut(duration: 0.12), value: hovering)
     }
 
+    /// The panel is narrow: one line, with the destination in the text.
+    private var compactBody: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 10) {
+                leadingIcon(size: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(entry.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                Text(TimeText.relative(entry.date))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            buttons
+                .padding(.leading, 32)
+                .buttonStyle(.pill)
+        }
+        .padding(13)
+    }
+
+    /// The window has room: a big file icon, the name, why, a tag for where it went, and actions on the right.
+    private var fullBody: some View {
+        HStack(alignment: .top, spacing: 14) {
+            leadingIcon(size: 38)
+            VStack(alignment: .leading, spacing: 5) {
+                nameLine
+                Text(entry.detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let summary = entry.summary, !summary.isEmpty {
+                    Text(summary)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                tagLine
+                if entry.kind == .suggested {
+                    buttons
+                        .buttonStyle(.pill)
+                        .padding(.top, 4)
+                }
+            }
+            Spacer(minLength: 10)
+            VStack(alignment: .trailing, spacing: 12) {
+                Text(TimeText.relative(entry.date))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                if entry.kind != .suggested {
+                    actionCluster
+                }
+            }
+        }
+        .padding(14)
+    }
+
+    /// The file name, with its extension in small monospaced type.
+    private var nameLine: some View {
+        let fileURL = URL(fileURLWithPath: entry.fileName)
+        let ext = fileURL.pathExtension
+        let stem = ext.isEmpty ? entry.fileName : fileURL.deletingPathExtension().lastPathComponent
+        return HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(entry.kind == .suggested ? fullTitle : stem)
+                .font(.system(size: 14, weight: .semibold))
+                .lineLimit(2)
+                .truncationMode(.middle)
+            if entry.kind != .suggested, !ext.isEmpty {
+                Text(".\(ext)")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Where it went, and whether it went by itself.
+    private var tagLine: some View {
+        HStack(spacing: 6) {
+            if entry.kind == .moved || entry.kind == .autoMoved, let name = entry.destinationName {
+                Chip(text: name, symbol: "folder")
+            }
+            if entry.kind == .autoMoved {
+                Chip(text: "Automatic", highlighted: true, symbol: "sparkle")
+            }
+        }
+    }
+
+    /// Undo, Rename and Finder, quiet until the pointer is over the row.
+    @ViewBuilder
+    private var actionCluster: some View {
+        if entry.isUndone {
+            Text("Undone")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+        } else {
+            HStack(spacing: 10) {
+                if entry.receipt != nil {
+                    IconAction(title: "Undo", symbol: "arrow.uturn.backward") { model.undo(entry.id) }
+                }
+                if let proposed = entry.proposedName {
+                    IconAction(title: "Rename", symbol: "pencil") { model.applyProposedName(entry.id) }
+                        .help("Rename to “\(proposed)”")
+                }
+                if entry.kind != .renamed {
+                    IconAction(title: "Finder", symbol: "magnifyingglass") {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.filePath)])
+                    }
+                }
+            }
+            .opacity(hovering ? 1 : 0.6)
+        }
+    }
+
     /// The file's own Finder icon, with a small brass spark on files filed automatically.
-    private var leadingIcon: some View {
+    private func leadingIcon(size: CGFloat) -> some View {
         let fileIcon = NSWorkspace.shared.icon(forFile: entry.filePath)
         return Image(nsImage: fileIcon)
             .resizable()
             .interpolation(.high)
-            .frame(width: 22, height: 22)
+            .frame(width: size, height: size)
             .overlay(alignment: .bottomTrailing) {
                 if entry.kind == .autoMoved {
                     Image(systemName: "sparkle")
@@ -357,36 +521,6 @@ struct ActivityRow: View {
             }
             .opacity(entry.isUndone ? 0.5 : 1)
             .accessibilityHidden(true)
-    }
-
-    /// The panel is narrow: one line, with the destination in the text.
-    private var compactHeader: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.callout.weight(.medium))
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Text(entry.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-    }
-
-    /// The window has room: the file name, then tags for where it went and whether it was automatic.
-    private var fullHeader: some View {
-        HStack(spacing: 8) {
-            Text(fullTitle)
-                .font(.system(size: 13.5, weight: .medium))
-                .lineLimit(2)
-                .truncationMode(.middle)
-            if entry.kind == .moved || entry.kind == .autoMoved, let name = entry.destinationName {
-                Chip(text: name)
-            }
-            if entry.kind == .autoMoved {
-                Chip(text: "Automatic", highlighted: true)
-            }
-        }
     }
 
     private var symbol: String {
