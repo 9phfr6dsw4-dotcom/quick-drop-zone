@@ -9,10 +9,70 @@ enum QDZStyle {
     static let brassDeep = Color(red: 0.62, green: 0.48, blue: 0.26)
     static let hairline = Color.white.opacity(0.09)
     static let cardFill = Color.white.opacity(0.045)
-    static let windowBackground = LinearGradient(
-        colors: [Color(red: 0.105, green: 0.110, blue: 0.125), Color(red: 0.062, green: 0.066, blue: 0.076)],
-        startPoint: .top, endPoint: .bottom)
     static let windowBackgroundNS = NSColor(calibratedRed: 0.075, green: 0.080, blue: 0.092, alpha: 1)
+}
+
+/// Graphite with a faint warm glow in the top-left corner, like light on brushed metal.
+struct WindowBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.108, green: 0.113, blue: 0.128), Color(red: 0.060, green: 0.064, blue: 0.074)],
+                startPoint: .top, endPoint: .bottom)
+            RadialGradient(colors: [QDZStyle.brass.opacity(0.07), Color.clear], center: .topLeading, startRadius: 0, endRadius: 560)
+        }
+    }
+}
+
+/// The surface of every card: lit from above, with a fine edge and a soft shadow.
+struct CardSurface: ViewModifier {
+    var radius: CGFloat
+    var hovering: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [Color.white.opacity(hovering ? 0.088 : 0.066), Color.white.opacity(hovering ? 0.052 : 0.03)],
+                        startPoint: .top, endPoint: .bottom))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(LinearGradient(
+                        colors: [Color.white.opacity(0.17), Color.white.opacity(0.05)],
+                        startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.28), radius: 10, y: 4)
+    }
+}
+
+extension View {
+    func cardSurface(radius: CGFloat = 14, hovering: Bool = false) -> some View {
+        modifier(CardSurface(radius: radius, hovering: hovering))
+    }
+}
+
+/// A row of fine ruler ticks in brass, echoing the dial on the app icon.
+struct TickRule: View {
+    var body: some View {
+        Canvas { context, size in
+            var x: CGFloat = 0
+            var index = 0
+            while x < size.width {
+                let major = index % 5 == 0
+                let fade = max(0.0, 1.0 - Double(x / size.width))
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: size.height))
+                path.addLine(to: CGPoint(x: x, y: size.height - (major ? 9 : 5)))
+                context.stroke(path, with: .color(QDZStyle.brass.opacity((major ? 0.75 : 0.4) * fade)), lineWidth: major ? 1.2 : 0.8)
+                x += 6
+                index += 1
+            }
+        }
+        .frame(width: 168, height: 10)
+        .accessibilityHidden(true)
+    }
 }
 
 extension View {
@@ -38,8 +98,7 @@ struct CardGroupBoxStyle: GroupBoxStyle {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
+        .cardSurface()
     }
 }
 
@@ -51,8 +110,7 @@ struct Card<Content: View>: View {
         content()
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
+            .cardSurface()
     }
 }
 
@@ -85,7 +143,10 @@ struct BrassButtonStyle: ButtonStyle {
                 LinearGradient(colors: [QDZStyle.brassLight, QDZStyle.brass], startPoint: .top, endPoint: .bottom),
                 in: Capsule()
             )
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5))
+            .overlay(Capsule().strokeBorder(
+                LinearGradient(colors: [Color.white.opacity(0.7), Color.white.opacity(0.1)], startPoint: .top, endPoint: .bottom),
+                lineWidth: 0.75))
+            .shadow(color: QDZStyle.brass.opacity(0.25), radius: 6, y: 2)
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.45)
     }
 }
@@ -136,11 +197,13 @@ struct PageHeader: View {
     let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.largeTitle.weight(.semibold))
+                .font(.system(size: 30, weight: .semibold))
+                .tracking(-0.4)
+            TickRule()
             Text(subtitle)
-                .font(.title3)
+                .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -160,10 +223,12 @@ struct Page<Content: View>: View {
                 content()
                 PrivacyFooter()
             }
-            .padding(28)
+            .padding(.horizontal, 28)
+            .padding(.top, 42)
+            .padding(.bottom, 28)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .background(QDZStyle.windowBackground)
+        .background(WindowBackground().ignoresSafeArea())
     }
 }
 
@@ -229,14 +294,14 @@ enum TimeText {
 /// One entry in Activity: what happened, where it went, why, and Undo / Rename / Move buttons.
 struct ActivityRow: View {
     @Environment(AppModel.self) private var model
+    @State private var hovering = false
     let entry: ActivityEntry
     var compact = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: symbol)
-                    .foregroundStyle(entry.isUndone ? Color.secondary : tint)
+            HStack(alignment: .center, spacing: 10) {
+                leadingIcon
                 if compact {
                     compactHeader
                 } else {
@@ -251,25 +316,47 @@ struct ActivityRow: View {
                 Text(entry.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.leading, 26)
+                    .padding(.leading, 32)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !compact, let summary = entry.summary, !summary.isEmpty {
                 Text(summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.leading, 26)
+                    .padding(.leading, 32)
                     .fixedSize(horizontal: false, vertical: true)
             }
             buttons
-                .padding(.leading, 26)
+                .padding(.leading, 32)
                 .buttonStyle(.pill)
         }
-        .padding(12)
+        .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
+        .cardSurface(radius: 13, hovering: hovering)
         .opacity(entry.isUndone ? 0.6 : 1)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+
+    /// The file's own Finder icon, with a small brass spark on files filed automatically.
+    private var leadingIcon: some View {
+        let fileIcon = NSWorkspace.shared.icon(forFile: entry.filePath)
+        return Image(nsImage: fileIcon)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: 22, height: 22)
+            .overlay(alignment: .bottomTrailing) {
+                if entry.kind == .autoMoved {
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(QDZStyle.brass)
+                        .padding(2)
+                        .background(Circle().fill(Color.black.opacity(0.75)))
+                        .offset(x: 4, y: 4)
+                }
+            }
+            .opacity(entry.isUndone ? 0.5 : 1)
+            .accessibilityHidden(true)
     }
 
     /// The panel is narrow: one line, with the destination in the text.
@@ -290,7 +377,7 @@ struct ActivityRow: View {
     private var fullHeader: some View {
         HStack(spacing: 8) {
             Text(fullTitle)
-                .font(.callout.weight(.medium))
+                .font(.system(size: 13.5, weight: .medium))
                 .lineLimit(2)
                 .truncationMode(.middle)
             if entry.kind == .moved || entry.kind == .autoMoved, let name = entry.destinationName {
@@ -369,5 +456,31 @@ struct ActivityRow: View {
                 }
             }
         }
+    }
+}
+
+/// A Settings row: the label on the left, a switch on the right.
+struct SettingToggle: View {
+    @Environment(\.isEnabled) private var isEnabled
+    let title: String
+    @Binding var isOn: Bool
+
+    init(_ title: String, isOn: Binding<Bool>) {
+        self.title = title
+        _isOn = isOn
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 12)
+            Toggle(title, isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
