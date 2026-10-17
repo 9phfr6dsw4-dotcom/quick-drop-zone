@@ -33,7 +33,7 @@ jobs:
       - name: Build, package, and verify app bundle and ZIP
         run: bash Scripts/package-app.sh
       - name: Verify downloadable ZIP checksum sidecar
-        run: python3 Scripts/test_checksum_sidecar.py dist/Quick-Drop-Zone-2.4.0.zip
+        run: python3 Scripts/test_checksum_sidecar.py dist/Quick-Drop-Zone-2.4.1.zip
       - name: Launch app smoke test
         run: bash Scripts/smoke-test.sh
       - name: Upload finished app ZIP
@@ -42,8 +42,8 @@ jobs:
         with:
           name: Quick-Drop-Zone-${{ github.run_number }}
           path: |
-            dist/Quick-Drop-Zone-2.4.0.zip
-            dist/Quick-Drop-Zone-2.4.0.zip.sha256
+            dist/Quick-Drop-Zone-2.4.1.zip
+            dist/Quick-Drop-Zone-2.4.1.zip.sha256
           if-no-files-found: error
           retention-days: 30
 

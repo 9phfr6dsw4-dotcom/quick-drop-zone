@@ -121,6 +121,8 @@ struct PillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.caption.weight(.medium))
+            .lineLimit(1)
+            .truncationMode(.middle)
             .padding(.horizontal, 11)
             .padding(.vertical, 5)
             .background(Color.white.opacity(configuration.isPressed ? 0.17 : 0.08), in: Capsule())
@@ -136,6 +138,8 @@ struct BrassButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.callout.weight(.semibold))
+            .lineLimit(1)
+            .truncationMode(.middle)
             .foregroundStyle(Color(red: 0.12, green: 0.09, blue: 0.03))
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
@@ -383,31 +387,78 @@ struct ActivityRow: View {
         .animation(.easeOut(duration: 0.12), value: hovering)
     }
 
-    /// The panel is narrow: one line, with the destination in the text.
+    /// The panel is narrow: the file name on one line, why, a new-name hint, then tags and small icon actions.
     private var compactBody: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 10) {
-                leadingIcon(size: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.callout.weight(.medium))
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                leadingIcon(size: 26)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.kind == .suggested ? fullTitle : entry.fileName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(entry.kind == .suggested ? 2 : 1)
                         .truncationMode(.middle)
                     Text(entry.detail)
-                        .font(.caption)
+                        .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                    renameHint
                 }
-                Spacer(minLength: 6)
+                Spacer(minLength: 4)
                 Text(TimeText.relative(entry.date))
-                    .font(.caption2)
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            buttons
-                .padding(.leading, 32)
-                .buttonStyle(.pill)
+            if entry.kind == .suggested {
+                buttons
+                    .buttonStyle(.pill)
+                    .padding(.leading, 36)
+            } else {
+                HStack(spacing: 6) {
+                    tagLine
+                    Spacer(minLength: 4)
+                    compactActions
+                }
+                .padding(.leading, 36)
+            }
         }
-        .padding(13)
+        .padding(12)
+    }
+
+    /// "New name: …", so the Rename button never has to carry the whole name.
+    @ViewBuilder
+    private var renameHint: some View {
+        if let proposed = entry.proposedName, !entry.isUndone {
+            Text("New name: \(proposed)")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
+    /// Small icon-only actions for the panel; hover for what each one does.
+    @ViewBuilder
+    private var compactActions: some View {
+        if entry.isUndone {
+            Text("Undone")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        } else {
+            HStack(spacing: 2) {
+                if entry.receipt != nil {
+                    BarButton(symbol: "arrow.uturn.backward", help: "Undo") { model.undo(entry.id) }
+                }
+                if let proposed = entry.proposedName {
+                    BarButton(symbol: "pencil", help: "Rename to “\(proposed)”") { model.applyProposedName(entry.id) }
+                }
+                if entry.kind != .renamed {
+                    BarButton(symbol: "magnifyingglass", help: "Show in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.filePath)])
+                    }
+                }
+            }
+        }
     }
 
     /// The window has room: a big file icon, the name, why, a tag for where it went, and actions on the right.
@@ -420,6 +471,7 @@ struct ActivityRow: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                renameHint
                 if let summary = entry.summary, !summary.isEmpty {
                     Text(summary)
                         .font(.system(size: 11.5))
@@ -556,7 +608,7 @@ struct ActivityRow: View {
 
     @ViewBuilder
     private var buttons: some View {
-        HStack(spacing: 8) {
+        FlowLayout(spacing: 8) {
             if entry.isUndone {
                 Text("Undone").font(.caption).foregroundStyle(.secondary)
             } else if entry.kind == .suggested {
@@ -572,16 +624,16 @@ struct ActivityRow: View {
                     }
                     .fixedSize()
                 }
-                if let proposed = entry.proposedName {
-                    Button("Rename to “\(proposed)”") { model.applyProposedName(entry.id) }
+                if entry.proposedName != nil {
+                    Button("Rename") { model.applyProposedName(entry.id) }
                 }
                 Button("Dismiss") { model.dismiss(entry.id) }
             } else {
                 if entry.receipt != nil {
                     Button("Undo") { model.undo(entry.id) }
                 }
-                if let proposed = entry.proposedName {
-                    Button("Rename to “\(proposed)”") { model.applyProposedName(entry.id) }
+                if entry.proposedName != nil {
+                    Button("Rename") { model.applyProposedName(entry.id) }
                 }
                 if entry.kind != .renamed {
                     Button("Show in Finder") {
@@ -616,5 +668,47 @@ struct SettingToggle: View {
                 .controlSize(.small)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Lays views out left to right and wraps to a new line when a row is full (used for button rows).
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? CGFloat.infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: widest, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
