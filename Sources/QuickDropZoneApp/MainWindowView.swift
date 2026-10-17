@@ -16,7 +16,8 @@ struct MainWindowView: View {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(QDZStyle.windowBackground)
+        .ignoresSafeArea(.container, edges: .top)
+        .background(WindowBackground().ignoresSafeArea())
         .qdzChrome()
         .frame(minWidth: 840, minHeight: 580)
         .alert("Quick Drop Zone", isPresented: Binding(
@@ -48,6 +49,8 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            BrandMark()
+                .padding(.bottom, 20)
             ForEach(MainTab.allCases) { tab in
                 SidebarRow(tab: tab, isSelected: selection == tab) {
                     selection = tab
@@ -57,9 +60,32 @@ struct SidebarView: View {
             IntelligenceCard()
         }
         .padding(.horizontal, 14)
-        .padding(.top, 16)
+        .padding(.top, 46)
         .padding(.bottom, 16)
         .frame(maxHeight: .infinity, alignment: .top)
+        .background(Color.black.opacity(0.2).ignoresSafeArea())
+    }
+}
+
+/// The app icon and name at the top of the sidebar (under the window's traffic lights).
+struct BrandMark: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 36, height: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Quick Drop Zone")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("FILE ORGANIZER")
+                    .font(.system(size: 9, weight: .medium))
+                    .tracking(1.5)
+                    .foregroundStyle(QDZStyle.brass.opacity(0.85))
+            }
+        }
+        .padding(.horizontal, 6)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -67,9 +93,9 @@ struct SidebarRow: View {
     let tab: MainTab
     let isSelected: Bool
     let action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
-        let background = isSelected ? Color.white.opacity(0.10) : Color.clear
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: tab.symbol)
@@ -79,15 +105,30 @@ struct SidebarRow: View {
                     .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                 Spacer(minLength: 0)
             }
-            .font(.callout)
+            .font(.system(size: 13.5, weight: isSelected ? .medium : .regular))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(background, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(rowFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Capsule()
+                        .fill(QDZStyle.brass)
+                        .frame(width: 3, height: 16)
+                        .padding(.leading, 3)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
         .accessibilityLabel(tab.title)
         .accessibilityAddTraits(isSelected ? AccessibilityTraits.isSelected : AccessibilityTraits())
+    }
+
+    private var rowFill: Color {
+        if isSelected { return Color.white.opacity(0.1) }
+        return hovering ? Color.white.opacity(0.05) : Color.clear
     }
 }
 
@@ -111,8 +152,7 @@ struct IntelligenceCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity)
-        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
+        .cardSurface(radius: 14)
     }
 }
 
@@ -377,7 +417,7 @@ struct CleanupRowView: View {
             .frame(width: 170)
         }
         .padding(8)
-        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .cardSurface(radius: 10)
     }
 }
 
@@ -455,7 +495,7 @@ struct SearchResultRow: View {
             }
         }
         .padding(8)
-        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .cardSurface(radius: 10)
     }
 
     private var detail: String {
@@ -618,8 +658,8 @@ struct SettingsTab: View {
         Page(title: "Settings", subtitle: "How much Quick Drop Zone does on its own, and what it watches.") {
             GroupBox("Apple Intelligence") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Use Apple Intelligence on this Mac", isOn: $model.aiEnabled)
-                    Toggle("Look inside files (PDF and document text, text and objects in images)", isOn: $model.readContents)
+                    SettingToggle("Use Apple Intelligence on this Mac", isOn: $model.aiEnabled)
+                    SettingToggle("Look inside files (PDF and document text, text and objects in images)", isOn: $model.readContents)
                         .disabled(!model.aiEnabled)
                     IntelligenceStatus()
                     Caption("Only Apple's on-device model is used, never a cloud service. Long numbers such as account and card numbers are hidden from it. Everything still works with this off.")
@@ -629,17 +669,17 @@ struct SettingsTab: View {
             }
             GroupBox("Moving files") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Move files it's sure about by itself (with Undo)", isOn: $model.autoMove)
+                    SettingToggle("Move files it's sure about by itself (with Undo)", isOn: $model.autoMove)
                     Caption("Sure means: one of your rules, a macOS screenshot, a pattern from 3+ of your own moves, or Apple Intelligence certain about a folder you described and backed by what's inside the file or where it came from. Renames and new folders always wait for you.")
-                    Toggle("Show a notification for each automatic move or suggestion", isOn: $model.notificationsEnabled)
+                    SettingToggle("Show a notification for each automatic move or suggestion", isOn: $model.notificationsEnabled)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 4)
             }
             GroupBox("Watch for new files") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Downloads", isOn: $model.watchDownloads)
-                    Toggle("Desktop (where screenshots go)", isOn: $model.watchDesktop)
+                    SettingToggle("Downloads", isOn: $model.watchDownloads)
+                    SettingToggle("Desktop (where screenshots go)", isOn: $model.watchDesktop)
                     ForEach(model.watchedFolders) { folder in
                         HStack {
                             Image(systemName: "eye").foregroundStyle(QDZStyle.brass)
@@ -664,7 +704,7 @@ struct SettingsTab: View {
                         Text("Minimum related files: \(model.minimumRelatedFileCount)")
                     }
                     Caption("A new folder is only suggested when at least this many files share a specific name (like a client or trip), never a broad word like school or finance. Default: 4.")
-                    Toggle("Let Apple Intelligence suggest new folders for related files", isOn: $model.aiGroupsEnabled)
+                    SettingToggle("Let Apple Intelligence suggest new folders for related files", isOn: $model.aiGroupsEnabled)
                         .disabled(!model.aiEnabled)
                     Caption("Off by default. When on, only for one specific project, trip, class or event with at least \(model.aiGroupMinimum) files. Suggestions always start unchecked.")
                 }

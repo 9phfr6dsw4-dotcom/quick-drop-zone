@@ -46,7 +46,7 @@ struct PanelView: View {
             footer
         }
         .frame(width: 400, height: 580)
-        .background(QDZStyle.windowBackground)
+        .background(WindowBackground().ignoresSafeArea())
         .qdzChrome()
         .alert("Quick Drop Zone", isPresented: Binding(
             get: { model.userError != nil },
@@ -60,11 +60,12 @@ struct PanelView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "tray.and.arrow.down.fill")
-                .font(.title3)
-                .foregroundStyle(QDZStyle.brass)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 26, height: 26)
             Text("Quick Drop Zone")
-                .font(.headline)
+                .font(.system(size: 14, weight: .semibold))
             Spacer()
             Button {
                 MainWindowController.shared.show(.activity)
@@ -97,29 +98,42 @@ struct PanelView: View {
         .padding(.bottom, 10)
     }
 
+    /// A recessed tray: dark inside, a brass dashed edge, and a glow when files are held over it.
     private var dropZone: some View {
-        RoundedRectangle(cornerRadius: 14)
-            .fill(isTargeted ? QDZStyle.brass.opacity(0.16) : QDZStyle.cardFill)
-            .overlay {
-                VStack(spacing: 8) {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [Color.black.opacity(isTargeted ? 0.18 : 0.4), Color.white.opacity(isTargeted ? 0.07 : 0.025)],
+                    startPoint: .top, endPoint: .bottom))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(isTargeted ? QDZStyle.brass : QDZStyle.brass.opacity(0.35),
+                              style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+            VStack(spacing: 9) {
+                ZStack {
+                    Circle()
+                        .fill(QDZStyle.brass.opacity(isTargeted ? 0.26 : 0.1))
+                    Circle()
+                        .strokeBorder(QDZStyle.brass.opacity(0.55), lineWidth: 1)
                     Image(systemName: "arrow.down.doc")
-                        .font(.system(size: 28, weight: .light))
+                        .font(.system(size: 21, weight: .light))
                         .foregroundStyle(QDZStyle.brass)
-                    Text("Drop files here")
-                        .font(.headline)
-                    Text(model.autoMove ? "Files it's sure about are filed right away, with Undo. The rest wait for you."
-                         : "Nothing moves until you choose a folder.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
                 }
-                .padding()
+                .frame(width: 54, height: 54)
+                Text("Drop files here")
+                    .font(.system(size: 15, weight: .semibold))
+                Text(model.autoMove ? "Files it's sure about are filed right away, with Undo. The rest wait for you."
+                     : "Nothing moves until you choose a folder.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
-            .frame(height: 130)
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(isTargeted ? QDZStyle.brass : QDZStyle.brass.opacity(0.35),
-                                                                     style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
-            .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted, perform: receiveDrop)
-            .accessibilityLabel("Drop files to sort them")
+            .padding(.horizontal, 18)
+        }
+        .frame(height: 156)
+        .scaleEffect(isTargeted ? 1.012 : 1)
+        .animation(.easeOut(duration: 0.15), value: isTargeted)
+        .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted, perform: receiveDrop)
+        .accessibilityLabel("Drop files to sort them")
     }
 
     private var footer: some View {
@@ -254,7 +268,6 @@ struct PendingCard: View {
             }
         }
         .padding(12)
-        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
+        .cardSurface(radius: 12)
     }
 }
