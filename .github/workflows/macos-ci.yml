@@ -3,7 +3,6 @@ name: macOS CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -16,6 +15,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Record and verify Xcode and SDK
         run: |
           xcodebuild -version
@@ -30,7 +31,7 @@ jobs:
       - name: Build, package, and verify app bundle and ZIP
         run: bash Scripts/package-app.sh
       - name: Verify downloadable ZIP checksum sidecar
-        run: python3 Scripts/test_checksum_sidecar.py dist/Quick-Drop-Zone-2.1.0.zip
+        run: python3 Scripts/test_checksum_sidecar.py dist/Quick-Drop-Zone-2.2.0.zip
       - name: Launch app smoke test
         run: bash Scripts/smoke-test.sh
       - name: Upload finished app ZIP
@@ -39,7 +40,62 @@ jobs:
         with:
           name: Quick-Drop-Zone-${{ github.run_number }}
           path: |
-            dist/Quick-Drop-Zone-2.1.0.zip
-            dist/Quick-Drop-Zone-2.1.0.zip.sha256
+            dist/Quick-Drop-Zone-2.2.0.zip
+            dist/Quick-Drop-Zone-2.2.0.zip.sha256
           if-no-files-found: error
           retention-days: 30
+
+  # Publishes a release when main has a version that hasn't been released yet, from the app this
+  # run just built and tested. Runs on Linux (cheaper minutes); needs only the uploaded ZIP.
+  release:
+    name: Publish release
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read the version
+        id: version
+        run: |
+          version="$(python3 -c "import plistlib; print(plistlib.load(open('Resources/Info.plist', 'rb'))['CFBundleShortVersionString'])")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version $version"
+      - name: Check whether it's already released
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "v$VERSION is already released; nothing to do."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download the app this run built
+        if: steps.existing.outputs.released == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: Quick-Drop-Zone-${{ github.run_number }}
+          path: release
+      - name: Verify the checksum
+        if: steps.existing.outputs.released == 'false'
+        working-directory: release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: sha256sum -c "Quick-Drop-Zone-$VERSION.zip.sha256"
+      - name: Publish
+        if: steps.existing.outputs.released == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          notes="docs/releases/$VERSION.md"
+          [ -f "$notes" ] || { echo "Missing $notes"; exit 1; }
+          gh release create "v$VERSION" "release/Quick-Drop-Zone-$VERSION.zip" "release/Quick-Drop-Zone-$VERSION.zip.sha256" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Quick Drop Zone $VERSION" --notes-file "$notes"
