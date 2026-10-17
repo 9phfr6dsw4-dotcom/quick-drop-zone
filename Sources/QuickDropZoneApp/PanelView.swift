@@ -33,7 +33,16 @@ struct PanelView: View {
                     }
                     let recent = model.activity.filter { $0.kind != .suggested }.prefix(4)
                     if !recent.isEmpty {
-                        SectionLabel("Recent")
+                        HStack {
+                            SectionLabel("Recent")
+                            Spacer()
+                            if model.lastMove != nil {
+                                Button("Undo Last Move") { model.undoLastMove() }
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .foregroundStyle(QDZStyle.brass)
+                            }
+                        }
                         ForEach(Array(recent)) { entry in
                             ActivityRow(entry: entry, compact: true)
                         }
@@ -67,14 +76,13 @@ struct PanelView: View {
             Text("Quick Drop Zone")
                 .font(.system(size: 14, weight: .semibold))
             Spacer()
-            Button {
-                MainWindowController.shared.show(.activity)
-            } label: {
-                Image(systemName: "macwindow")
-            }
-            .buttonStyle(.borderless)
-            .help("Open the Quick Drop Zone window")
             Menu {
+                Button("Clean Up Downloads…") {
+                    model.startDownloadsCleanup()
+                    MainWindowController.shared.show(.cleanup)
+                }
+                Button("Find a File…") { MainWindowController.shared.show(.find) }
+                Divider()
                 Button("Settings…") { MainWindowController.shared.show(.settings) }
                 Button("Folders & Rules…") { MainWindowController.shared.show(.folders) }
                 Divider()
@@ -136,21 +144,18 @@ struct PanelView: View {
         .accessibilityLabel("Drop files to sort them")
     }
 
+    /// One clear action: open the full window. Clean Up and Find are in the ⋯ menu.
     private var footer: some View {
-        HStack(spacing: 10) {
-            Button("Clean Up…", systemImage: "sparkles.rectangle.stack") {
-                model.startDownloadsCleanup()
-                MainWindowController.shared.show(.cleanup)
-            }
-            Button("Find…", systemImage: "magnifyingglass") {
-                MainWindowController.shared.show(.find)
-            }
+        HStack {
             Spacer()
-            if model.lastMove != nil {
-                Button("Undo Last Move", systemImage: "arrow.uturn.backward") { model.undoLastMove() }
+            Button {
+                MainWindowController.shared.show(.activity)
+            } label: {
+                Label("Open Quick Drop Zone", systemImage: "macwindow")
             }
+            .buttonStyle(.brass)
+            Spacer()
         }
-        .buttonStyle(.pill)
         .padding(12)
     }
 
