@@ -4,18 +4,26 @@ import SwiftUI
 
 struct MainWindowView: View {
     @Environment(AppModel.self) private var model
+    @State private var sidebarVisible = true
 
     var body: some View {
         @Bindable var model = model
         HStack(spacing: 0) {
-            SidebarView(selection: $model.selectedTab)
-                .frame(width: 214)
-            Rectangle()
-                .fill(QDZStyle.hairline)
-                .frame(width: 1)
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if sidebarVisible {
+                SidebarView(selection: $model.selectedTab)
+                    .frame(width: 222)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                Rectangle()
+                    .fill(QDZStyle.hairline)
+                    .frame(width: 1)
+            }
+            VStack(spacing: 0) {
+                TopBar(sidebarVisible: $sidebarVisible)
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
+        .animation(.easeInOut(duration: 0.22), value: sidebarVisible)
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowBackground().ignoresSafeArea())
         .qdzChrome()
@@ -43,17 +51,105 @@ struct MainWindowView: View {
     }
 }
 
+/// A slim bar above the page: hide the sidebar, jump to Find, and see what's being watched.
+/// It is the same on every page, so the window never changes shape.
+struct TopBar: View {
+    @Binding var sidebarVisible: Bool
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 6) {
+            BarButton(symbol: "sidebar.left", help: "Show or hide the sidebar") {
+                sidebarVisible.toggle()
+            }
+            BarButton(symbol: "magnifyingglass", help: "Find a file") {
+                model.selectedTab = .find
+            }
+            Spacer()
+            WatchPill()
+        }
+        .padding(.leading, sidebarVisible ? 16 : 84)
+        .padding(.trailing, 18)
+        .frame(height: 46)
+        .background(Color.white.opacity(0.025))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(QDZStyle.hairline)
+                .frame(height: 1)
+        }
+    }
+}
+
+struct BarButton: View {
+    let symbol: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 14))
+                .foregroundStyle(hovering ? Color.primary : Color.secondary)
+                .frame(width: 30, height: 28)
+                .background(hovering ? Color.white.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// "Watching 2 folders": a small brass dot and a count; click for Settings.
+struct WatchPill: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button {
+            model.selectedTab = .settings
+        } label: {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(model.isWatching ? QDZStyle.brass : Color.secondary)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: model.isWatching ? QDZStyle.brass.opacity(0.8) : Color.clear, radius: 3)
+                Text(summary)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.06), in: Capsule())
+            .overlay(Capsule().strokeBorder(QDZStyle.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help("What Quick Drop Zone is watching. Click to change it in Settings.")
+    }
+
+    private var summary: String {
+        let count = (model.watchDownloads ? 1 : 0) + (model.watchDesktop ? 1 : 0) + model.watchedFolders.count
+        guard model.isWatching, count > 0 else { return "Not watching" }
+        return count == 1 ? "Watching 1 folder" : "Watching \(count) folders"
+    }
+}
+
 /// The list of pages on the left, with Apple Intelligence's state at the bottom.
 struct SidebarView: View {
     @Binding var selection: MainTab
+    @Environment(AppModel.self) private var model
+    @Namespace private var selectionSpace
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             BrandMark()
                 .padding(.bottom, 20)
             ForEach(MainTab.allCases) { tab in
-                SidebarRow(tab: tab, isSelected: selection == tab) {
-                    selection = tab
+                SidebarRow(tab: tab, isSelected: selection == tab, badge: badge(for: tab), space: selectionSpace) {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        selection = tab
+                    }
                 }
             }
             Spacer(minLength: 12)
@@ -63,7 +159,37 @@ struct SidebarView: View {
         .padding(.top, 46)
         .padding(.bottom, 16)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color.black.opacity(0.2).ignoresSafeArea())
+        .background(SidebarBackground())
+    }
+
+    /// Files waiting for a decision on Activity; loose files found on Clean Up.
+    private func badge(for tab: MainTab) -> Int? {
+        switch tab {
+        case .activity:
+            let waiting = model.openSuggestions.count
+            return waiting > 0 ? waiting : nil
+        case .cleanup:
+            let rows = model.cleanupRows.count
+            return rows > 0 ? rows : nil
+        default:
+            return nil
+        }
+    }
+}
+
+/// A darker column with a soft warm glow low on the left, like light through frosted glass.
+struct SidebarBackground: View {
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Color.black.opacity(0.24)
+            Circle()
+                .fill(QDZStyle.brass.opacity(0.2))
+                .frame(width: 230, height: 230)
+                .blur(radius: 60)
+                .offset(x: -70, y: -90)
+        }
+        .clipped()
+        .ignoresSafeArea()
     }
 }
 
@@ -92,6 +218,8 @@ struct BrandMark: View {
 struct SidebarRow: View {
     let tab: MainTab
     let isSelected: Bool
+    let badge: Int?
+    let space: Namespace.ID
     let action: () -> Void
     @State private var hovering = false
 
@@ -104,17 +232,25 @@ struct SidebarRow: View {
                 Text(tab.title)
                     .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                 Spacer(minLength: 0)
+                if let badge {
+                    Text("\(badge)")
+                        .font(.system(size: 11, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Color.white.opacity(0.1), in: Capsule())
+                }
             }
             .font(.system(size: 13.5, weight: isSelected ? .medium : .regular))
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(rowFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(alignment: .leading) {
+            .padding(.vertical, 9)
+            .background {
                 if isSelected {
-                    Capsule()
-                        .fill(QDZStyle.brass)
-                        .frame(width: 3, height: 16)
-                        .padding(.leading, 3)
+                    selectionPill
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.05))
                 }
             }
             .contentShape(Rectangle())
@@ -126,9 +262,18 @@ struct SidebarRow: View {
         .accessibilityAddTraits(isSelected ? AccessibilityTraits.isSelected : AccessibilityTraits())
     }
 
-    private var rowFill: Color {
-        if isSelected { return Color.white.opacity(0.1) }
-        return hovering ? Color.white.opacity(0.05) : Color.clear
+    /// The brass-edged highlight; it slides from page to page.
+    private var selectionPill: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(LinearGradient(colors: [Color.white.opacity(0.14), Color.white.opacity(0.07)], startPoint: .top, endPoint: .bottom))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(LinearGradient(
+                        colors: [QDZStyle.brass.opacity(0.9), QDZStyle.brass.opacity(0.28)],
+                        startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            )
+            .shadow(color: QDZStyle.brass.opacity(0.2), radius: 8)
+            .matchedGeometryEffect(id: "selection", in: space)
     }
 }
 
@@ -138,21 +283,42 @@ struct IntelligenceCard: View {
 
     var body: some View {
         let available = model.aiUnavailableReason == nil
-        VStack(spacing: 6) {
-            Image(systemName: available ? "sparkles" : "sparkles.slash")
-                .font(.title3)
-                .foregroundStyle(available ? QDZStyle.brass : Color.secondary)
-            Text("Apple Intelligence")
-                .font(.callout.weight(.medium))
-            Text(model.aiUnavailableReason ?? "On, running on this Mac only.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: 10) {
+            tile(available: available)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Apple Intelligence")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text(model.aiUnavailableReason ?? "On-device, private to this Mac")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(available ? QDZStyle.brass.opacity(0.9) : Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(11)
         .frame(maxWidth: .infinity)
-        .cardSurface(radius: 14)
+        .cardSurface(radius: 12)
+    }
+
+    /// A small colourful tile, in the spirit of Apple's own Apple Intelligence glyph.
+    private func tile(available: Bool) -> some View {
+        let colors: [Color] = [
+            Color(red: 1.0, green: 0.62, blue: 0.3),
+            Color(red: 0.96, green: 0.38, blue: 0.58),
+            Color(red: 0.62, green: 0.42, blue: 0.96),
+            Color(red: 0.32, green: 0.58, blue: 1.0),
+            Color(red: 1.0, green: 0.62, blue: 0.3)
+        ]
+        return ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(AngularGradient(colors: colors, center: .center))
+                .saturation(available ? 1 : 0)
+                .opacity(available ? 1 : 0.45)
+            Image(systemName: available ? "sparkles" : "sparkles.slash")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.white)
+        }
+        .frame(width: 30, height: 30)
     }
 }
 
@@ -162,53 +328,55 @@ struct ActivityTab: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Page(title: "Activity", subtitle: "Everything Quick Drop Zone moved, renamed or suggested. Anything it did can be undone.") {
-            Card {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label(watchSummary, systemImage: model.isWatching ? "eye" : "eye.slash")
-                    IntelligenceStatus()
-                    if let status = model.statusMessage {
-                        Caption(status)
-                    }
+        Page(title: "Activity", subtitle: "Everything Quick Drop Zone moved, renamed or suggested. Anything it did can be undone.",
+             accessory: { headerButtons }, content: {
+            if let status = model.statusMessage {
+                Card {
+                    Label(status, systemImage: "checkmark.circle")
+                        .font(.callout)
                 }
             }
             let waiting = model.openSuggestions
             if !waiting.isEmpty {
-                GroupBox("Waiting for you") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Caption("New files Quick Drop Zone wasn't sure about. Nothing moves until you click.")
-                        ForEach(waiting) { entry in
-                            ActivityRow(entry: entry)
-                        }
+                VStack(alignment: .leading, spacing: 10) {
+                    DayLabel("Waiting for you")
+                    Caption("New files Quick Drop Zone wasn't sure about. Nothing moves until you click.")
+                    ForEach(waiting) { entry in
+                        ActivityRow(entry: entry)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             let recent = model.activity.filter { $0.kind != .suggested }
             if recent.isEmpty {
-                Caption("Nothing yet. Drop a file on the menu-bar icon or panel, or save one to a watched folder.")
+                Card {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(watchSummary, systemImage: model.isWatching ? "eye" : "eye.slash")
+                        Caption("Nothing yet. Drop a file on the menu-bar icon or panel, or save one to a watched folder.")
+                    }
+                }
             } else {
                 let sections = ActivityGrouping.sections(recent)
                 ForEach(0..<sections.count, id: \.self) { index in
-                    daySection(sections[index], showsActions: index == 0)
+                    daySection(sections[index])
                 }
             }
-        }
+        })
     }
 
-    private func daySection(_ section: ActivityDaySection, showsActions: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(section.title).font(.headline)
-                Spacer()
-                if showsActions {
-                    if model.lastMove != nil {
-                        Button("Undo Last Move", systemImage: "arrow.uturn.backward") { model.undoLastMove() }
-                    }
-                    Button("Clear List") { model.clearActivity() }
-                }
+    /// Undo Last Move and Clear List sit beside the title.
+    private var headerButtons: some View {
+        HStack(spacing: 8) {
+            if model.lastMove != nil {
+                Button("Undo Last Move", systemImage: "arrow.uturn.backward") { model.undoLastMove() }
             }
-            .buttonStyle(.pill)
+            Button("Clear List") { model.clearActivity() }
+        }
+        .buttonStyle(.pill)
+    }
+
+    private func daySection(_ section: ActivityDaySection) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            DayLabel(section.title)
             ForEach(section.entries) { entry in
                 ActivityRow(entry: entry)
             }
@@ -237,7 +405,9 @@ struct CleanUpTab: View {
         Page(title: "Clean Up", subtitle: "Review a folder's loose files. Nothing moves, gets renamed or goes to Trash until you approve it.") {
             HStack(spacing: 10) {
                 Button("Clean Downloads", systemImage: "arrow.down.circle") { model.startDownloadsCleanup() }
+                    .buttonStyle(.brass)
                 Button("Choose Folder…", systemImage: "folder") { model.chooseCleanupFolder() }
+                    .buttonStyle(.pill)
                 Spacer()
                 if model.cleanupFolder != nil, model.aiReady, model.cleanupProgress == nil {
                     Button("Ask Apple Intelligence Again", systemImage: "sparkles") {
