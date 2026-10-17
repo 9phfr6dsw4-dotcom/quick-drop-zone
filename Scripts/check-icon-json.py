@@ -3,7 +3,9 @@
 
 In an Icon Composer file the FIRST group and the FIRST layer are the FRONT-most. Quick Drop Zone's
 2.2.0 icon came out black because the full-size dark bezel was listed first and covered everything.
-This fails if that order is wrong, a named image is missing, or a file in Assets/ isn't used.
+Apple's compiler also allows at most four groups ("Too many visible groups", 2.3.0's first CI run).
+This fails if that order is wrong, there are more than four groups, a named image is missing, or a file
+in Assets/ isn't used.
 """
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ from pathlib import Path
 
 ICON = Path(__file__).resolve().parent.parent / "Resources" / "AppIcon.icon"
 FRONT_TO_BACK = ["chevron", "glass", "slot", "ticks", "chamber", "bezel"]
+MAX_GROUPS = 4
 
 
 def main() -> int:
@@ -20,6 +23,8 @@ def main() -> int:
     layers = [layer for group in data["groups"] for layer in group["layers"]]
     names = [layer["name"] for layer in layers]
     problems: list[str] = []
+    if len(data["groups"]) > MAX_GROUPS:
+        problems.append(f"{len(data['groups'])} groups; actool allows at most {MAX_GROUPS}")
     if names != FRONT_TO_BACK:
         problems.append(f"layers are {names}, expected front to back {FRONT_TO_BACK}")
     images = [layer["image-name"] for layer in layers]
@@ -32,7 +37,7 @@ def main() -> int:
     for problem in problems:
         print(f"error: {problem}", file=sys.stderr)
     if not problems:
-        print("icon.json: " + " > ".join(names) + " (front to back), all images present")
+        print(f"icon.json: {' > '.join(names)} (front to back) in {len(data['groups'])} groups, all images present")
     return 1 if problems else 0
 
 

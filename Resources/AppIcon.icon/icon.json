@@ -11,27 +11,17 @@
         {
           "image-name" : "chevron.png",
           "name" : "chevron"
-        }
-      ],
-      "name" : "Chevron",
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
-      },
-      "specular" : true
-    },
-    {
-      "layers" : [
+        },
         {
           "glass" : true,
           "image-name" : "glass.png",
           "name" : "glass"
         }
       ],
-      "name" : "Glass",
+      "name" : "Tile",
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.45
+        "opacity" : 0.5
       },
       "specular" : true,
       "translucency" : {
