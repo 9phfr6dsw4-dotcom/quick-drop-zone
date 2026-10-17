@@ -11,6 +11,7 @@ struct QuickDropZoneApp: App {
         Settings {
             SettingsTab()
                 .environment(AppModel.shared)
+                .qdzChrome()
                 .frame(width: 640, height: 720)
         }
     }
@@ -126,6 +127,8 @@ final class StatusItemController: NSObject, NSWindowDelegate, NSDraggingDestinat
         panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.appearance = NSAppearance(named: .darkAqua)
+        panel.backgroundColor = QDZStyle.windowBackgroundNS
         panel.contentView = NSHostingView(rootView: PanelView().environment(AppModel.shared))
         return panel
     }
@@ -183,7 +186,9 @@ final class MainWindowController: NSObject, NSWindowDelegate {
                               backing: .buffered, defer: false)
         window.title = "Quick Drop Zone"
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 760, height: 580)
+        window.minSize = NSSize(width: 840, height: 580)
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = QDZStyle.windowBackgroundNS
         window.contentViewController = NSHostingController(rootView: MainWindowView().environment(AppModel.shared))
         window.setContentSize(NSSize(width: 920, height: 760))
         window.center()

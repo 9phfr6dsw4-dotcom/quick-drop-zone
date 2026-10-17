@@ -7,25 +7,18 @@ struct MainWindowView: View {
 
     var body: some View {
         @Bindable var model = model
-        TabView(selection: $model.selectedTab) {
-            ActivityTab()
-                .tabItem { Label(MainTab.activity.title, systemImage: MainTab.activity.symbol) }
-                .tag(MainTab.activity)
-            CleanUpTab()
-                .tabItem { Label(MainTab.cleanup.title, systemImage: MainTab.cleanup.symbol) }
-                .tag(MainTab.cleanup)
-            FindTab()
-                .tabItem { Label(MainTab.find.title, systemImage: MainTab.find.symbol) }
-                .tag(MainTab.find)
-            FoldersTab()
-                .tabItem { Label(MainTab.folders.title, systemImage: MainTab.folders.symbol) }
-                .tag(MainTab.folders)
-            SettingsTab()
-                .tabItem { Label(MainTab.settings.title, systemImage: MainTab.settings.symbol) }
-                .tag(MainTab.settings)
+        HStack(spacing: 0) {
+            SidebarView(selection: $model.selectedTab)
+                .frame(width: 214)
+            Rectangle()
+                .fill(QDZStyle.hairline)
+                .frame(width: 1)
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .tint(QDZStyle.blue)
-        .frame(minWidth: 760, minHeight: 580)
+        .background(QDZStyle.windowBackground)
+        .qdzChrome()
+        .frame(minWidth: 840, minHeight: 580)
         .alert("Quick Drop Zone", isPresented: Binding(
             get: { model.userError != nil },
             set: { if !$0 { model.userError = nil } }
@@ -34,6 +27,92 @@ struct MainWindowView: View {
         } message: {
             Text(model.userError ?? "")
         }
+    }
+
+    /// The five pages. There is no toolbar or inspector, so the window never changes shape between pages.
+    @ViewBuilder
+    private var detail: some View {
+        switch model.selectedTab {
+        case .activity: ActivityTab()
+        case .cleanup: CleanUpTab()
+        case .find: FindTab()
+        case .folders: FoldersTab()
+        case .settings: SettingsTab()
+        }
+    }
+}
+
+/// The list of pages on the left, with Apple Intelligence's state at the bottom.
+struct SidebarView: View {
+    @Binding var selection: MainTab
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(MainTab.allCases) { tab in
+                SidebarRow(tab: tab, isSelected: selection == tab) {
+                    selection = tab
+                }
+            }
+            Spacer(minLength: 12)
+            IntelligenceCard()
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 16)
+        .padding(.bottom, 16)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+}
+
+struct SidebarRow: View {
+    let tab: MainTab
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let background = isSelected ? Color.white.opacity(0.10) : Color.clear
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: tab.symbol)
+                    .frame(width: 20)
+                    .foregroundStyle(isSelected ? QDZStyle.brass : Color.secondary)
+                Text(tab.title)
+                    .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                Spacer(minLength: 0)
+            }
+            .font(.callout)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(background, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.title)
+        .accessibilityAddTraits(isSelected ? AccessibilityTraits.isSelected : AccessibilityTraits())
+    }
+}
+
+/// Apple Intelligence's state, as a small card at the bottom of the sidebar.
+struct IntelligenceCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let available = model.aiUnavailableReason == nil
+        VStack(spacing: 6) {
+            Image(systemName: available ? "sparkles" : "sparkles.slash")
+                .font(.title3)
+                .foregroundStyle(available ? QDZStyle.brass : Color.secondary)
+            Text("Apple Intelligence")
+                .font(.callout.weight(.medium))
+            Text(model.aiUnavailableReason ?? "On, running on this Mac only.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
     }
 }
 
@@ -44,7 +123,7 @@ struct ActivityTab: View {
 
     var body: some View {
         Page(title: "Activity", subtitle: "Everything Quick Drop Zone moved, renamed or suggested. Anything it did can be undone.") {
-            GroupBox {
+            Card {
                 VStack(alignment: .leading, spacing: 6) {
                     Label(watchSummary, systemImage: model.isWatching ? "eye" : "eye.slash")
                     IntelligenceStatus()
@@ -52,8 +131,6 @@ struct ActivityTab: View {
                         Caption(status)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
             }
             let waiting = model.openSuggestions
             if !waiting.isEmpty {
@@ -65,31 +142,35 @@ struct ActivityTab: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 4)
                 }
             }
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Recent").font(.headline)
-                        Spacer()
-                        if model.lastMove != nil {
-                            Button("Undo Last Move", systemImage: "arrow.uturn.backward") { model.undoLastMove() }
-                        }
-                        Button("Clear List") { model.clearActivity() }
-                            .disabled(model.activity.allSatisfy { $0.kind == .suggested })
-                    }
-                    let recent = model.activity.filter { $0.kind != .suggested }
-                    if recent.isEmpty {
-                        Caption("Nothing yet. Drop a file on the menu-bar icon or panel, or save one to a watched folder.")
-                    } else {
-                        ForEach(recent) { entry in
-                            ActivityRow(entry: entry)
-                        }
-                    }
+            let recent = model.activity.filter { $0.kind != .suggested }
+            if recent.isEmpty {
+                Caption("Nothing yet. Drop a file on the menu-bar icon or panel, or save one to a watched folder.")
+            } else {
+                let sections = ActivityGrouping.sections(recent)
+                ForEach(0..<sections.count, id: \.self) { index in
+                    daySection(sections[index], showsActions: index == 0)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private func daySection(_ section: ActivityDaySection, showsActions: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(section.title).font(.headline)
+                Spacer()
+                if showsActions {
+                    if model.lastMove != nil {
+                        Button("Undo Last Move", systemImage: "arrow.uturn.backward") { model.undoLastMove() }
+                    }
+                    Button("Clear List") { model.clearActivity() }
+                }
+            }
+            .buttonStyle(.pill)
+            ForEach(section.entries) { entry in
+                ActivityRow(entry: entry)
             }
         }
     }
@@ -296,7 +377,7 @@ struct CleanupRowView: View {
             .frame(width: 170)
         }
         .padding(8)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -374,7 +455,7 @@ struct SearchResultRow: View {
             }
         }
         .padding(8)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var detail: String {
@@ -402,7 +483,7 @@ struct FoldersTab: View {
                     ForEach(model.favoriteFolders) { folder in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Image(systemName: "folder.fill").foregroundStyle(QDZStyle.blue)
+                                Image(systemName: "folder.fill").foregroundStyle(QDZStyle.brass)
                                 Text(folder.name)
                                     .font(.callout.weight(.medium))
                                 Spacer()
@@ -561,7 +642,7 @@ struct SettingsTab: View {
                     Toggle("Desktop (where screenshots go)", isOn: $model.watchDesktop)
                     ForEach(model.watchedFolders) { folder in
                         HStack {
-                            Image(systemName: "eye").foregroundStyle(QDZStyle.blue)
+                            Image(systemName: "eye").foregroundStyle(QDZStyle.brass)
                             Text(folder.name)
                             Spacer()
                             Button("Stop Watching") { model.removeWatchedFolder(id: folder.id) }

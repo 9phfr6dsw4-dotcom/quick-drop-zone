@@ -2,11 +2,133 @@ import AppKit
 import QuickDropZoneCore
 import SwiftUI
 
-/// The same look as EchoFlow, EchoLedger and Lumen.
+/// Graphite surfaces with thin champagne-brass details, matching the app icon. The app is always dark.
 enum QDZStyle {
-    static let blue = Color(red: 0.17, green: 0.49, blue: 0.94)
-    static let cyan = Color(red: 0.55, green: 0.88, blue: 1.0)
-    static let green = Color(red: 0.16, green: 0.62, blue: 0.40)
+    static let brass = Color(red: 0.84, green: 0.72, blue: 0.47)
+    static let brassLight = Color(red: 0.95, green: 0.87, blue: 0.66)
+    static let brassDeep = Color(red: 0.62, green: 0.48, blue: 0.26)
+    static let hairline = Color.white.opacity(0.09)
+    static let cardFill = Color.white.opacity(0.045)
+    static let windowBackground = LinearGradient(
+        colors: [Color(red: 0.105, green: 0.110, blue: 0.125), Color(red: 0.062, green: 0.066, blue: 0.076)],
+        startPoint: .top, endPoint: .bottom)
+    static let windowBackgroundNS = NSColor(calibratedRed: 0.075, green: 0.080, blue: 0.092, alpha: 1)
+}
+
+extension View {
+    /// Dark appearance, brass tint and card-style group boxes for everything inside.
+    func qdzChrome() -> some View {
+        self
+            .tint(QDZStyle.brass)
+            .groupBoxStyle(CardGroupBoxStyle())
+            .preferredColorScheme(.dark)
+    }
+}
+
+/// Every `GroupBox` in the app: a soft card with a thin edge and a small brass heading.
+struct CardGroupBoxStyle: GroupBoxStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            configuration.label
+                .font(.caption.weight(.semibold))
+                .textCase(.uppercase)
+                .tracking(1.1)
+                .foregroundStyle(QDZStyle.brass)
+            configuration.content
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
+    }
+}
+
+/// A card without a heading.
+struct Card<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content()
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
+    }
+}
+
+/// Small rounded buttons (Undo, Rename, Show in Finder).
+struct PillButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(configuration.isPressed ? 0.17 : 0.08), in: Capsule())
+            .overlay(Capsule().strokeBorder(QDZStyle.hairline, lineWidth: 1))
+            .opacity(isEnabled ? 1 : 0.45)
+    }
+}
+
+/// The main action: a brass pill with dark text.
+struct BrassButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(Color(red: 0.12, green: 0.09, blue: 0.03))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(
+                LinearGradient(colors: [QDZStyle.brassLight, QDZStyle.brass], startPoint: .top, endPoint: .bottom),
+                in: Capsule()
+            )
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.45)
+    }
+}
+
+extension ButtonStyle where Self == PillButtonStyle {
+    static var pill: PillButtonStyle { PillButtonStyle() }
+}
+
+extension ButtonStyle where Self == BrassButtonStyle {
+    static var brass: BrassButtonStyle { BrassButtonStyle() }
+}
+
+/// A small tag, like the folder a file went to.
+struct Chip: View {
+    let text: String
+    var highlighted = false
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(highlighted ? QDZStyle.brass : Color.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(highlighted ? QDZStyle.brass.opacity(0.14) : Color.white.opacity(0.08), in: Capsule())
+            .lineLimit(1)
+    }
+}
+
+/// A small uppercase brass heading for a block of the panel.
+struct SectionLabel: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .textCase(.uppercase)
+            .tracking(1.1)
+            .foregroundStyle(QDZStyle.brass)
+    }
 }
 
 struct PageHeader: View {
@@ -41,7 +163,7 @@ struct Page<Content: View>: View {
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(QDZStyle.windowBackground)
     }
 }
 
@@ -91,7 +213,7 @@ struct IntelligenceStatus: View {
         } else {
             Label("Apple Intelligence is on, running on this Mac only.", systemImage: "sparkles")
                 .font(.caption)
-                .foregroundStyle(QDZStyle.blue)
+                .foregroundStyle(QDZStyle.brass)
         }
     }
 }
@@ -104,7 +226,7 @@ enum TimeText {
     }
 }
 
-/// One line in Activity: what happened, why, and Undo / Rename / Move buttons.
+/// One entry in Activity: what happened, where it went, why, and Undo / Rename / Move buttons.
 struct ActivityRow: View {
     @Environment(AppModel.self) private var model
     let entry: ActivityEntry
@@ -115,20 +237,22 @@ struct ActivityRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: symbol)
                     .foregroundStyle(entry.isUndone ? Color.secondary : tint)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.callout.weight(.medium))
-                        .lineLimit(compact ? 1 : 2)
-                        .truncationMode(.middle)
-                    Text(entry.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(compact ? 1 : 3)
+                if compact {
+                    compactHeader
+                } else {
+                    fullHeader
                 }
                 Spacer(minLength: 6)
                 Text(TimeText.relative(entry.date))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+            }
+            if !compact {
+                Text(entry.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 26)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if !compact, let summary = entry.summary, !summary.isEmpty {
                 Text(summary)
@@ -139,11 +263,43 @@ struct ActivityRow: View {
             }
             buttons
                 .padding(.leading, 26)
-                .controlSize(.small)
+                .buttonStyle(.pill)
         }
-        .padding(10)
-        .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
         .opacity(entry.isUndone ? 0.6 : 1)
+    }
+
+    /// The panel is narrow: one line, with the destination in the text.
+    private var compactHeader: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(entry.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    /// The window has room: the file name, then tags for where it went and whether it was automatic.
+    private var fullHeader: some View {
+        HStack(spacing: 8) {
+            Text(fullTitle)
+                .font(.callout.weight(.medium))
+                .lineLimit(2)
+                .truncationMode(.middle)
+            if entry.kind == .moved || entry.kind == .autoMoved, let name = entry.destinationName {
+                Chip(text: name)
+            }
+            if entry.kind == .autoMoved {
+                Chip(text: "Automatic", highlighted: true)
+            }
+        }
     }
 
     private var symbol: String {
@@ -156,7 +312,15 @@ struct ActivityRow: View {
     }
 
     private var tint: Color {
-        entry.kind == .suggested ? Color.orange : QDZStyle.blue
+        entry.kind == .suggested ? Color.orange : QDZStyle.brass
+    }
+
+    private var fullTitle: String {
+        switch entry.kind {
+        case .autoMoved, .moved, .renamed: return entry.fileName
+        case .suggested:
+            return entry.destinationName.map { "\(entry.fileName): move to \($0)?" } ?? "\(entry.fileName): a clearer name?"
+        }
     }
 
     private var title: String {
@@ -177,7 +341,7 @@ struct ActivityRow: View {
             } else if entry.kind == .suggested {
                 if let name = entry.destinationName {
                     Button("Move to \(name)") { model.acceptSuggestion(entry.id) }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.brass)
                 }
                 if !model.favoriteFolders.isEmpty {
                     Menu("Other Folder") {

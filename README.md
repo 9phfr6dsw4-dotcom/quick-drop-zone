@@ -26,7 +26,8 @@
 - **Clean up any folder.** Review suggestions for loose files, approve new folders for files about one specific thing (a client, a trip, a class project), and move installers of apps you already have to Trash. Apple Intelligence's new-folder ideas are off until you turn them on.
 - **Find files in plain words**, like “the PDF from the dentist last month”, using the same index as Finder search.
 - **What is this file?** A one-line summary of any file.
-- **Activity** lists everything that moved, was renamed or is waiting for you. Everything can be undone; nothing is ever permanently deleted.
+- **Activity** lists everything that moved, was renamed or is waiting for you, grouped by day. Everything can be undone; nothing is ever permanently deleted.
+- **A dark graphite-and-brass look**, with a sidebar for Activity, Clean Up, Find, Folders & Rules and Settings.
 
 ## Install
 

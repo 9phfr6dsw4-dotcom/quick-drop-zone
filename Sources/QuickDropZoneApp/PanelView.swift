@@ -26,16 +26,14 @@ struct PanelView: View {
                     }
                     let waiting = model.openSuggestions
                     if !waiting.isEmpty {
-                        Text("Waiting for you (\(waiting.count))")
-                            .font(.headline)
+                        SectionLabel("Waiting for you (\(waiting.count))")
                         ForEach(waiting.prefix(3)) { entry in
                             ActivityRow(entry: entry, compact: true)
                         }
                     }
                     let recent = model.activity.filter { $0.kind != .suggested }.prefix(4)
                     if !recent.isEmpty {
-                        Text("Recent")
-                            .font(.headline)
+                        SectionLabel("Recent")
                         ForEach(Array(recent)) { entry in
                             ActivityRow(entry: entry, compact: true)
                         }
@@ -48,7 +46,8 @@ struct PanelView: View {
             footer
         }
         .frame(width: 400, height: 580)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(QDZStyle.windowBackground)
+        .qdzChrome()
         .alert("Quick Drop Zone", isPresented: Binding(
             get: { model.userError != nil },
             set: { if !$0 { model.userError = nil } }
@@ -63,7 +62,7 @@ struct PanelView: View {
         HStack(spacing: 10) {
             Image(systemName: "tray.and.arrow.down.fill")
                 .font(.title3)
-                .foregroundStyle(QDZStyle.blue)
+                .foregroundStyle(QDZStyle.brass)
             Text("Quick Drop Zone")
                 .font(.headline)
             Spacer()
@@ -100,12 +99,12 @@ struct PanelView: View {
 
     private var dropZone: some View {
         RoundedRectangle(cornerRadius: 14)
-            .fill(isTargeted ? QDZStyle.blue.opacity(0.18) : Color.secondary.opacity(0.08))
+            .fill(isTargeted ? QDZStyle.brass.opacity(0.16) : QDZStyle.cardFill)
             .overlay {
                 VStack(spacing: 8) {
                     Image(systemName: "arrow.down.doc")
-                        .font(.system(size: 28))
-                        .foregroundStyle(QDZStyle.blue)
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(QDZStyle.brass)
                     Text("Drop files here")
                         .font(.headline)
                     Text(model.autoMove ? "Files it's sure about are filed right away, with Undo. The rest wait for you."
@@ -117,7 +116,7 @@ struct PanelView: View {
                 .padding()
             }
             .frame(height: 130)
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(isTargeted ? QDZStyle.blue : Color.secondary.opacity(0.25),
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(isTargeted ? QDZStyle.brass : QDZStyle.brass.opacity(0.35),
                                                                      style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
             .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted, perform: receiveDrop)
             .accessibilityLabel("Drop files to sort them")
@@ -137,7 +136,7 @@ struct PanelView: View {
                 Button("Undo Last Move", systemImage: "arrow.uturn.backward") { model.undoLastMove() }
             }
         }
-        .controlSize(.small)
+        .buttonStyle(.pill)
         .padding(12)
     }
 
@@ -244,17 +243,18 @@ struct PendingCard: View {
                                 if folder.id == pending.suggestionID {
                                     Text("Suggested")
                                         .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(QDZStyle.blue)
+                                        .foregroundStyle(QDZStyle.brass)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.pill)
                     }
                 }
             }
         }
         .padding(12)
-        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        .background(QDZStyle.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(QDZStyle.hairline, lineWidth: 1))
     }
 }
