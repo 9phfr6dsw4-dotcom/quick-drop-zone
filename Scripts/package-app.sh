@@ -8,7 +8,7 @@ APP="dist/Quick Drop Zone.app"
 ICONSET="dist/AppIcon.iconset"
 ICON_OUT="dist/AppIcon-compiled"
 VERIFY_DIR="dist/verify-extracted"
-ZIP="dist/Quick-Drop-Zone-2.5.0.zip"
+ZIP="dist/Quick-Drop-Zone-2.5.1.zip"
 SIGNING_REPORT="dist/signing.txt"
 SIGN_MODE="${SIGN_MODE:-adhoc}"
 export SIGN_MODE
@@ -86,8 +86,8 @@ expect_plist() {
 plutil -lint "$APP/Contents/Info.plist"
 expect_plist LSUIElement true
 expect_plist LSMinimumSystemVersion 26.0
-expect_plist CFBundleShortVersionString 2.5.0
-expect_plist CFBundleVersion 9
+expect_plist CFBundleShortVersionString 2.5.1
+expect_plist CFBundleVersion 10
 expect_plist CFBundleIconFile AppIcon
 expect_plist CFBundleIconName AppIcon
 expect_plist SUFeedURL "https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest/download/appcast.xml"
@@ -124,8 +124,8 @@ expect_plist_in() {
         exit 1
     fi
 }
-expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.5.0
-expect_plist_in "$EXTRACTED_APP" CFBundleVersion 9
+expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.5.1
+expect_plist_in "$EXTRACTED_APP" CFBundleVersion 10
 expect_plist_in "$EXTRACTED_APP" CFBundleIconName AppIcon
 expect_plist_in "$EXTRACTED_APP" SUFeedURL "https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest/download/appcast.xml"
 plutil -lint "$EXTRACTED_APP/Contents/Info.plist"
