@@ -14,7 +14,7 @@ jobs:
     name: Test and package on macOS 26
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Record and verify Xcode and SDK
@@ -38,7 +38,7 @@ jobs:
         run: bash Scripts/smoke-test.sh
       - name: Upload finished app ZIP
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Quick-Drop-Zone-${{ github.run_number }}
           path: |
@@ -58,7 +58,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Read the version
@@ -81,7 +81,7 @@ jobs:
           fi
       - name: Download the app this run built
         if: steps.existing.outputs.released == 'false'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: Quick-Drop-Zone-${{ github.run_number }}
           path: release
