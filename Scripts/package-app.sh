@@ -8,13 +8,35 @@ APP="dist/Quick Drop Zone.app"
 ICONSET="dist/AppIcon.iconset"
 ICON_OUT="dist/AppIcon-compiled"
 VERIFY_DIR="dist/verify-extracted"
-ZIP="dist/Quick-Drop-Zone-2.4.1.zip"
+ZIP="dist/Quick-Drop-Zone-2.5.0.zip"
+SIGNING_REPORT="dist/signing.txt"
+SIGN_MODE="${SIGN_MODE:-adhoc}"
+export SIGN_MODE
 
 swift build -c release --product QuickDropZone
-rm -rf "$APP" "$ICONSET" "$ICON_OUT" "$VERIFY_DIR" "$ZIP" "$ZIP.sha256"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" dist
+rm -rf "$APP" "$ICONSET" "$ICON_OUT" "$VERIFY_DIR" "$ZIP" "$ZIP.sha256" "$SIGNING_REPORT" "dist/notarize"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks" dist
 cp .build/release/QuickDropZone "$APP/Contents/MacOS/QuickDropZone"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/Acknowledgements.txt "$APP/Contents/Resources/Acknowledgements.txt"
+
+# Sparkle comes from the exact version SwiftPM resolved and checksummed.
+SPARKLE_FRAMEWORKS=()
+while IFS= read -r framework; do
+    SPARKLE_FRAMEWORKS+=("$framework")
+done < <(find .build/artifacts -type d -path '*/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework' -prune)
+if [[ "${#SPARKLE_FRAMEWORKS[@]}" -ne 1 ]]; then
+    printf 'Expected one Sparkle.framework in .build/artifacts, found %s.\n' "${#SPARKLE_FRAMEWORKS[@]}" >&2
+    exit 1
+fi
+ditto "${SPARKLE_FRAMEWORKS[0]}" "$APP/Contents/Frameworks/Sparkle.framework"
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Frameworks/Sparkle.framework/Resources/Info.plist" | grep -Fx '2.10.0'
+test -x "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+test -x "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater"
+otool -L "$APP/Contents/MacOS/QuickDropZone" | grep -F '@rpath/Sparkle.framework/Versions/B/Sparkle'
+otool -l "$APP/Contents/MacOS/QuickDropZone" | grep -F 'path @executable_path/../Frameworks'
+grep -F 'Sparkle 2.10.0' "$APP/Contents/Resources/Acknowledgements.txt"
+
 swift Scripts/GenerateIcon.swift "$ICONSET" "Resources/AppIcon-1024.png"
 iconutil -c icns -o "$APP/Contents/Resources/AppIcon.icns" "$ICONSET"
 cp Resources/AppIcon-1024.png "$APP/Contents/Resources/AppIcon-1024.png"
@@ -64,14 +86,22 @@ expect_plist() {
 plutil -lint "$APP/Contents/Info.plist"
 expect_plist LSUIElement true
 expect_plist LSMinimumSystemVersion 26.0
-expect_plist CFBundleShortVersionString 2.4.1
-expect_plist CFBundleVersion 8
+expect_plist CFBundleShortVersionString 2.5.0
+expect_plist CFBundleVersion 9
 expect_plist CFBundleIconFile AppIcon
 expect_plist CFBundleIconName AppIcon
+expect_plist SUFeedURL "https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest/download/appcast.xml"
 test -s "$APP/Contents/Resources/AppIcon.icns"
 test -s "$APP/Contents/Resources/Assets.car"
-codesign --force --deep --sign - "$APP"
-codesign --verify --deep --strict "$APP"
+
+# Signing is the last change to the app; everything after only zips, checks and hashes it.
+bash Scripts/sign-app.sh "$APP"
+
+NOTARIZED="no"
+if [[ "$SIGN_MODE" == "developer-id" ]]; then
+    bash Scripts/notarize.sh "$APP"
+    NOTARIZED="yes"
+fi
 
 # Verify the exact ZIP intended for download, including executable mode.
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
@@ -84,6 +114,8 @@ if [ ! -s "$EXTRACTED_APP/Contents/Resources/Assets.car" ]; then
     echo "error: Assets.car (the macOS 26+ icon) is missing inside the ZIP" >&2
     exit 1
 fi
+test -x "$EXTRACTED_APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+test -L "$EXTRACTED_APP/Contents/Frameworks/Sparkle.framework/Versions/Current"
 expect_plist_in() {
     local actual
     actual="$(/usr/libexec/PlistBuddy -c "Print :$2" "$1/Contents/Info.plist")"
@@ -92,10 +124,22 @@ expect_plist_in() {
         exit 1
     fi
 }
-expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.4.1
+expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.5.0
+expect_plist_in "$EXTRACTED_APP" CFBundleVersion 9
 expect_plist_in "$EXTRACTED_APP" CFBundleIconName AppIcon
+expect_plist_in "$EXTRACTED_APP" SUFeedURL "https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest/download/appcast.xml"
 plutil -lint "$EXTRACTED_APP/Contents/Info.plist"
 codesign --verify --deep --strict "$EXTRACTED_APP"
+if [[ "$NOTARIZED" == "yes" ]]; then
+    xcrun stapler validate "$EXTRACTED_APP"
+    spctl --assess --type execute --verbose=2 "$EXTRACTED_APP"
+fi
 file "$EXTRACTED_APP/Contents/MacOS/QuickDropZone"
 bash Scripts/write-checksum-sidecar.sh "$ZIP"
+{
+    printf 'mode=%s\n' "$SIGN_MODE"
+    printf 'notarized=%s\n' "$NOTARIZED"
+    codesign --display --requirements - "$EXTRACTED_APP" 2>/dev/null | sed -n 's/^designated => /requirement=/p'
+} > "$SIGNING_REPORT"
+cat "$SIGNING_REPORT"
 printf 'Verified package: %s\n' "$ZIP"

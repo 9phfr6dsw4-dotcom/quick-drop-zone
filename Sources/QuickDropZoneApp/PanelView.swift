@@ -14,6 +14,16 @@ struct PanelView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    if let version = UpdateController.shared.updateWaiting {
+                        Button {
+                            UpdateController.shared.checkForUpdates()
+                        } label: {
+                            Label("Quick Drop Zone \(version) is ready to install", systemImage: "arrow.down.circle.fill")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(QDZStyle.brass)
+                    }
                     dropZone
                     if let pending = model.pending {
                         PendingCard(pending: pending)
@@ -85,6 +95,8 @@ struct PanelView: View {
                 Divider()
                 Button("Settings…") { MainWindowController.shared.show(.settings) }
                 Button("Folders & Rules…") { MainWindowController.shared.show(.folders) }
+                Button("Check for Updates…") { UpdateController.shared.checkForUpdates() }
+                    .disabled(!UpdateController.shared.canCheckForUpdates)
                 Divider()
                 Button("Quit Quick Drop Zone") { NSApp.terminate(nil) }
             } label: {

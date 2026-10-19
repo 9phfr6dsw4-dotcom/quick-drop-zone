@@ -14,6 +14,12 @@ struct QuickDropZoneApp: App {
                 .qdzChrome()
                 .frame(width: 640, height: 720)
         }
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { UpdateController.shared.checkForUpdates() }
+                    .disabled(!UpdateController.shared.canCheckForUpdates)
+            }
+        }
     }
 }
 
@@ -23,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         StatusItemController.shared.install()
         AppModel.shared.start()
+        UpdateController.shared.start()
         let defaults = UserDefaults.standard
         if !defaults.bool(forKey: AppModel.Keys.hasLaunched) {
             defaults.set(true, forKey: AppModel.Keys.hasLaunched)
