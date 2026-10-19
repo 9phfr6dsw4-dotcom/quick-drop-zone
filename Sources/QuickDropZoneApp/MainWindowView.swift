@@ -823,6 +823,11 @@ struct RuleEditorView: View {
 struct SettingsTab: View {
     @Environment(AppModel.self) private var model
 
+    private var lastUpdateCheckText: String {
+        guard let date = UpdateController.shared.lastCheckDate else { return "Not checked for updates yet." }
+        return "Last checked \(date.formatted(date: .abbreviated, time: .shortened))."
+    }
+
     var body: some View {
         @Bindable var model = model
         Page(title: "Settings", subtitle: "How much Quick Drop Zone does on its own, and what it watches.") {
@@ -881,9 +886,34 @@ struct SettingsTab: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 4)
             }
+            GroupBox("Updates") {
+                VStack(alignment: .leading, spacing: 8) {
+                    SettingToggle("Check for updates automatically", isOn: Binding(
+                        get: { UpdateController.shared.automaticallyChecks },
+                        set: { UpdateController.shared.setAutomaticallyChecks($0) }
+                    ))
+                    Caption("Quick Drop Zone looks for a new version when it starts and then every hour.")
+                    SettingToggle("Download and install updates automatically", isOn: Binding(
+                        get: { UpdateController.shared.automaticallyInstalls },
+                        set: { UpdateController.shared.setAutomaticallyInstalls($0) }
+                    ))
+                    .disabled(!UpdateController.shared.automaticallyChecks)
+                    Caption("Quick Drop Zone installs a new version and reopens by itself, once no file is waiting to be filed. Your rules, folders and history stay as they are.")
+                    HStack {
+                        Text(lastUpdateCheckText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Check for Updates…") { UpdateController.shared.checkForUpdates() }
+                            .disabled(!UpdateController.shared.canCheckForUpdates)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
             GroupBox("Privacy and safety") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Files, names, contents, rules and learning stay on this Mac. Quick Drop Zone has no networking and no analytics.", systemImage: "lock.shield")
+                    Label("Files, names, contents, rules and learning stay on this Mac. Quick Drop Zone has no analytics. The only thing it sends online is the check for a new version of itself, with GitHub.", systemImage: "lock.shield")
                         .fixedSize(horizontal: false, vertical: true)
                     Label("Nothing is ever permanently deleted. Every move and rename can be undone from Activity or Undo Last Move.", systemImage: "arrow.uturn.backward.circle")
                         .fixedSize(horizontal: false, vertical: true)

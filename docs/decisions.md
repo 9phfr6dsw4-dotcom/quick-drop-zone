@@ -4,7 +4,7 @@
 
 - Use Swift and SwiftUI, with AppKit for menu-bar integration and other native APIs. Target macOS 26 and newer; the app shows a Dock icon only while its main window is open.
 - The menu-bar panel stays open until the person closes it (×, Esc or the menu-bar icon), so picking files up in Finder doesn't close it. Files can also be dropped on the menu-bar icon.
-- Runtime file handling, preferences, learning, metadata and content inspection stay on the Mac. No cloud processing, analytics, or upload of files, names, or contents. GitHub is used only for authorized source, CI, and app releases—not personal files.
+- Runtime file handling, preferences, learning, metadata and content inspection stay on the Mac. No cloud processing, analytics, or upload of files, names, or contents. GitHub is used only for authorized source, CI, and app releases—not personal files. From 2.5.0 the app also asks GitHub whether a newer version of itself exists (Sparkle); that request carries no file information.
 - Apple Intelligence uses only `SystemLanguageModel.default` (on-device). Never Private Cloud Compute or another hosted model, not even as a fallback. Reading inside files (PDF/document text, Vision text recognition and image classification, download source) is on by default and can be turned off; long digit runs are hidden from the model.
 
 ## Approval and file safety

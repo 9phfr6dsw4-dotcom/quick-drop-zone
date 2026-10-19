@@ -33,7 +33,9 @@
 
 1. Download the ZIP from the latest release and unzip it.
 2. Move **Quick Drop Zone.app** into **/Applications** (replace the old version if you have one), then open it.
-3. If macOS blocks it: **System Settings → Privacy & Security → Open Anyway**. The app is ad-hoc signed and not notarized.
+3. If macOS blocks it: **System Settings → Privacy & Security → Open Anyway**. The app is not notarized yet.
+
+From 2.5.0 on, Quick Drop Zone updates itself: it checks for a new version when it starts and every hour, and installs it once no file is waiting to be filed. **Check for Updates…** is in the panel's menu, and **Settings → Updates** has the options.
 4. Allow access to Downloads and Desktop when macOS asks (for watching), and allow notifications if you want Undo and Move buttons on them.
 5. For the Apple Intelligence features, turn on **System Settings → Apple Intelligence & Siri**. Everything else works without it.
 
@@ -50,7 +52,7 @@ Partial downloads, hidden files and installers are never moved automatically.
 
 ## Privacy
 
-Everything happens on your Mac. Quick Drop Zone has no networking and no analytics. Apple Intelligence runs with Apple's on-device model only, never a cloud service, and long numbers such as account and card numbers are hidden from it. Reading inside files can be turned off in Settings, and so can Apple Intelligence; the app keeps working either way.
+Everything happens on your Mac. Quick Drop Zone has no analytics. The only thing it sends online is the check for a new version of itself, with GitHub. Files, names and contents are never uploaded. Apple Intelligence runs with Apple's on-device model only, never a cloud service, and long numbers such as account and card numbers are hidden from it. Reading inside files can be turned off in Settings, and so can Apple Intelligence; the app keeps working either way.
 
 <details>
 <summary>Build and test</summary>

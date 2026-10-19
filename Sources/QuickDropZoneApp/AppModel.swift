@@ -539,6 +539,11 @@ final class AppModel {
 
     var isWatching: Bool { watchDownloads || watchDesktop || !watchedFolders.isEmpty }
 
+    /// A file is waiting for a choice, being filed, searched for, or queued from watching. An update waits for this.
+    var isBusyWithFiles: Bool {
+        pending != nil || isProcessingQueue || !watchQueue.isEmpty || isSearching
+    }
+
     func addWatchedFolder() {
         guard let url = chooseFolder(title: "Watch a folder", prompt: "Watch Folder") else { return }
         guard let bookmark = try? url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil) else {
