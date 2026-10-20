@@ -18,7 +18,7 @@ struct PanelView: View {
                         Button {
                             UpdateController.shared.checkForUpdates()
                         } label: {
-                            Label("Quick Drop Zone \(version) is ready to install", systemImage: "arrow.down.circle.fill")
+                            Label("Levant \(version) is ready to install", systemImage: "arrow.down.circle.fill")
                                 .font(.caption)
                         }
                         .buttonStyle(.borderless)
@@ -67,7 +67,7 @@ struct PanelView: View {
         .frame(width: 400, height: 580)
         .background(WindowBackground().ignoresSafeArea())
         .qdzChrome()
-        .alert("Quick Drop Zone", isPresented: Binding(
+        .alert("Levant", isPresented: Binding(
             get: { model.userError != nil },
             set: { if !$0 { model.userError = nil } }
         )) {
@@ -83,7 +83,7 @@ struct PanelView: View {
                 .resizable()
                 .interpolation(.high)
                 .frame(width: 26, height: 26)
-            Text("Quick Drop Zone")
+            Text("Levant")
                 .font(.system(size: 14, weight: .semibold))
             Spacer()
             Menu {
@@ -98,7 +98,7 @@ struct PanelView: View {
                 Button("Check for Updates…") { UpdateController.shared.checkForUpdates() }
                     .disabled(!UpdateController.shared.canCheckForUpdates)
                 Divider()
-                Button("Quit Quick Drop Zone") { NSApp.terminate(nil) }
+                Button("Quit Levant") { NSApp.terminate(nil) }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -163,7 +163,7 @@ struct PanelView: View {
             Button {
                 MainWindowController.shared.show(.activity)
             } label: {
-                Label("Open Quick Drop Zone", systemImage: "macwindow")
+                Label("Open Levant", systemImage: "macwindow")
             }
             .buttonStyle(.brass)
             Spacer()

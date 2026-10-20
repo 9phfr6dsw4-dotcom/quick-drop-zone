@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     products: [
         .library(name: "QuickDropZoneCore", targets: ["QuickDropZoneCore"]),
-        .executable(name: "QuickDropZone", targets: ["QuickDropZoneApp"])
+        .executable(name: "Levant", targets: ["QuickDropZoneApp"])
     ],
     dependencies: [
         // Automatic updates. Pinned exactly; the packaged app embeds this framework.

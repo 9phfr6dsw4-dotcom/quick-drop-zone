@@ -28,7 +28,7 @@ struct MainWindowView: View {
         .background(WindowBackground().ignoresSafeArea())
         .qdzChrome()
         .frame(minWidth: 840, minHeight: 580)
-        .alert("Quick Drop Zone", isPresented: Binding(
+        .alert("Levant", isPresented: Binding(
             get: { model.userError != nil },
             set: { if !$0 { model.userError = nil } }
         )) {
@@ -125,7 +125,7 @@ struct WatchPill: View {
             .overlay(Capsule().strokeBorder(QDZStyle.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .help("What Quick Drop Zone is watching. Click to change it in Settings.")
+        .help("What Levant is watching. Click to change it in Settings.")
     }
 
     private var summary: String {
@@ -202,7 +202,7 @@ struct BrandMark: View {
                 .interpolation(.high)
                 .frame(width: 36, height: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Quick Drop Zone")
+                Text("Levant")
                     .font(.system(size: 13, weight: .semibold))
                 Text("FILE ORGANIZER")
                     .font(.system(size: 9, weight: .medium))
@@ -328,7 +328,7 @@ struct ActivityTab: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Page(title: "Activity", subtitle: "Everything Quick Drop Zone moved, renamed or suggested. Anything it did can be undone.",
+        Page(title: "Activity", subtitle: "Everything Levant moved, renamed or suggested. Anything it did can be undone.",
              accessory: { headerButtons }, content: {
             if let status = model.statusMessage {
                 Card {
@@ -340,7 +340,7 @@ struct ActivityTab: View {
             if !waiting.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     DayLabel("Waiting for you")
-                    Caption("New files Quick Drop Zone wasn't sure about. Nothing moves until you click.")
+                    Caption("New files Levant wasn't sure about. Nothing moves until you click.")
                     ForEach(waiting) { entry in
                         ActivityRow(entry: entry)
                     }
@@ -830,7 +830,7 @@ struct SettingsTab: View {
 
     var body: some View {
         @Bindable var model = model
-        Page(title: "Settings", subtitle: "How much Quick Drop Zone does on its own, and what it watches.") {
+        Page(title: "Settings", subtitle: "How much Levant does on its own, and what it watches.") {
             GroupBox("Apple Intelligence") {
                 VStack(alignment: .leading, spacing: 8) {
                     SettingToggle("Use Apple Intelligence on this Mac", isOn: $model.aiEnabled)
@@ -892,13 +892,13 @@ struct SettingsTab: View {
                         get: { UpdateController.shared.automaticallyChecks },
                         set: { UpdateController.shared.setAutomaticallyChecks($0) }
                     ))
-                    Caption("Quick Drop Zone looks for a new version when it starts and then every hour.")
+                    Caption("Levant looks for a new version when it starts and then every hour.")
                     SettingToggle("Download and install updates automatically", isOn: Binding(
                         get: { UpdateController.shared.automaticallyInstalls },
                         set: { UpdateController.shared.setAutomaticallyInstalls($0) }
                     ))
                     .disabled(!UpdateController.shared.automaticallyChecks)
-                    Caption("Quick Drop Zone installs a new version and reopens by itself, once no file is waiting to be filed. Your rules, folders and history stay as they are.")
+                    Caption("Levant installs a new version and reopens by itself, once no file is waiting to be filed. Your rules, folders and history stay as they are.")
                     HStack {
                         Text(lastUpdateCheckText)
                             .font(.caption)
@@ -913,7 +913,7 @@ struct SettingsTab: View {
             }
             GroupBox("Privacy and safety") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Files, names, contents, rules and learning stay on this Mac. Quick Drop Zone has no analytics. The only thing it sends online is the check for a new version of itself, with GitHub.", systemImage: "lock.shield")
+                    Label("Files, names, contents, rules and learning stay on this Mac. Levant has no analytics. The only thing it sends online is the check for a new version of itself, with GitHub.", systemImage: "lock.shield")
                         .fixedSize(horizontal: false, vertical: true)
                     Label("Nothing is ever permanently deleted. Every move and rename can be undone from Activity or Undo Last Move.", systemImage: "arrow.uturn.backward.circle")
                         .fixedSize(horizontal: false, vertical: true)

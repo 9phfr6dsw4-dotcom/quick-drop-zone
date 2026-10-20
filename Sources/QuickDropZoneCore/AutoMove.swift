@@ -10,7 +10,7 @@ public enum AutoMoveDecision: Equatable, Sendable {
     case skip(reason: String)
 }
 
-/// Decides when Quick Drop Zone may move a file by itself.
+/// Decides when Levant may move a file by itself.
 ///
 /// Sure: your rules, macOS screenshots, patterns learned from 3+ of your moves, and Apple
 /// Intelligence answers for a folder you described, marked confident and backed by more than the
@@ -123,13 +123,13 @@ public struct FolderWatchState: Sendable {
         return ready.sorted()
     }
 
-    /// Marks a path as handled (for example a file Quick Drop Zone itself renamed in place).
+    /// Marks a path as handled (for example a file Levant itself renamed in place).
     public mutating func markHandled(_ path: String) {
         tracked[path]?.handled = true
     }
 }
 
-/// One thing Quick Drop Zone did or suggested, shown in Activity with Undo.
+/// One thing Levant did or suggested, shown in Activity with Undo.
 public struct ActivityEntry: Codable, Equatable, Identifiable, Sendable {
     public enum Kind: String, Codable, Sendable {
         case autoMoved, moved, renamed, suggested

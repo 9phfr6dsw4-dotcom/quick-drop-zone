@@ -12,7 +12,7 @@ public struct FileMoveReceipt: Codable, Equatable {
 
 public struct MoveBatchReceipt: Codable, Equatable {
     public let moves: [FileMoveReceipt]
-    /// Contains only folders Quick Drop Zone itself created for this approved batch.
+    /// Contains only folders Levant itself created for this approved batch.
     public let createdFolders: [URL]
 
     public init(moves: [FileMoveReceipt], createdFolders: [URL] = []) {

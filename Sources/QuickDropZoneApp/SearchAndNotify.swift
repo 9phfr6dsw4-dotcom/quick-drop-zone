@@ -66,7 +66,7 @@ final class FileSearcher {
     }
 }
 
-/// Notifications for files Quick Drop Zone moved or has a suggestion for, with Undo / Move buttons.
+/// Notifications for files Levant moved or has a suggestion for, with Undo / Move buttons.
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     static let shared = Notifier()

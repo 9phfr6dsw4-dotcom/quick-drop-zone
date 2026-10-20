@@ -18,7 +18,7 @@ func withModelTimeout<T: Sendable>(_ duration: Duration, _ operation: @escaping 
     }
 }
 
-/// Apple's on-device language model, used directly. Quick Drop Zone only ever uses
+/// Apple's on-device language model, used directly. Levant only ever uses
 /// `SystemLanguageModel.default`, which runs on this Mac. It never uses Apple's cloud models or any
 /// other service, not even as a fallback: when the model isn't available, the AI features stay off
 /// and everything else keeps working.

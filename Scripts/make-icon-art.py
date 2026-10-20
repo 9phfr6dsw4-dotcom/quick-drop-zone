@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Draws Quick Drop Zone's icon: the layers of Resources/AppIcon.icon and the flat 1024px fallback
-(Resources/AppIcon-1024.png and docs/images/quick-drop-zone-icon.png).
+"""Draws Levant's icon: the layers of Resources/AppIcon.icon and the flat 1024px fallback
+(Resources/AppIcon-1024.png and docs/images/levant-icon.png).
 
 Developer tool, not part of CI. Needs Pillow and numpy:  python3 Scripts/make-icon-art.py
 
@@ -329,7 +329,7 @@ def main() -> None:
         layers[name].save(ASSETS / f"{name}.png", optimize=True)
     flat = flat_composite(layers)
     flat.save(ROOT / "Resources" / "AppIcon-1024.png", optimize=True)
-    flat.save(ROOT / "docs" / "images" / "quick-drop-zone-icon.png", optimize=True)
+    flat.save(ROOT / "docs" / "images" / "levant-icon.png", optimize=True)
     print("wrote layers:", ", ".join(BACK_TO_FRONT), "and the flat 1024px icon")
 
 
