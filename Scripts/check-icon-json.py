@@ -39,6 +39,8 @@ def main() -> int:
     for skin in SKINS:
         if not (skin_icons / f"icon-{skin}.png").is_file():
             problems.append(f"missing Resources/SkinIcons/icon-{skin}.png")
+    if not (ICON.parent / "IntelligenceMark.png").is_file():
+        problems.append("missing Resources/IntelligenceMark.png")
     for problem in problems:
         print(f"error: {problem}", file=sys.stderr)
     if not problems:

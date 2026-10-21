@@ -106,11 +106,35 @@ struct SkinTile: View {
     }
 }
 
-/// The Apple Intelligence mark: seven interlaced loops in navy fading to a muted gold, on a light tile.
+/// The Apple Intelligence mark in the sidebar card: the artwork bundled as IntelligenceMark.png (a light rounded
+/// tile with seven interlaced loops). If the file is missing (a build run outside the packaged app), a drawn
+/// version of the loops is used instead.
 struct IntelligenceMark: View {
     var available = true
 
+    private static let artwork: NSImage? = Bundle.main.url(forResource: "IntelligenceMark", withExtension: "png")
+        .flatMap { NSImage(contentsOf: $0) }
+
     var body: some View {
+        Group {
+            if let artwork = Self.artwork {
+                // The artwork has a little space and shadow around its tile; this keeps the tile at 34 points.
+                Image(nsImage: artwork)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 40, height: 40)
+                    .padding(-3)
+            } else {
+                drawn
+            }
+        }
+        .frame(width: 34, height: 34)
+        .saturation(available ? 1 : 0)
+        .opacity(available ? 1 : 0.5)
+        .accessibilityHidden(true)
+    }
+
+    private var drawn: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LinearGradient(colors: [Color.white, Color(red: 0.90, green: 0.91, blue: 0.92)], startPoint: .top, endPoint: .bottom))
@@ -121,11 +145,7 @@ struct IntelligenceMark: View {
                 .mask { rosette }
                 .padding(4)
         }
-        .frame(width: 34, height: 34)
         .shadow(color: Color.black.opacity(0.25), radius: 3, y: 1)
-        .saturation(available ? 1 : 0)
-        .opacity(available ? 1 : 0.5)
-        .accessibilityHidden(true)
     }
 
     /// Seven ellipses turned round the centre, so each crosses its neighbours and the middle stays open.
