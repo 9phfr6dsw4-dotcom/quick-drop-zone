@@ -155,6 +155,8 @@ public struct SkinPreference: Equatable, Sendable {
     public var darkSkin: Skin
     public var lightSkin: Skin
     public var fixedSkin: Skin
+    /// Whether the Dock icon and the icon on the app in Finder follow the skin (the saved key keeps
+    /// its 2.7.0 name).
     public var dockIconFollowsSkin: Bool
 
     public init(mode: SkinMode = .followSystem, darkSkin: Skin = .defaultDark, lightSkin: Skin = .defaultLight,

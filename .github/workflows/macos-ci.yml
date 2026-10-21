@@ -43,9 +43,11 @@ jobs:
       - name: Build, package, and verify app bundle and ZIP
         run: bash Scripts/package-app.sh
       - name: Verify downloadable ZIP checksum sidecar
-        run: python3 Scripts/test_checksum_sidecar.py dist/Levant-2.7.1.zip
+        run: python3 Scripts/test_checksum_sidecar.py dist/Levant-2.8.0.zip
       - name: Launch app smoke test
         run: bash Scripts/smoke-test.sh
+      - name: Put a skin icon on the app in Finder and take it off
+        run: bash Scripts/finder-icon-test.sh
       - name: Update an older build to a newer one through Sparkle
         run: bash Scripts/update-test.sh
       - name: Remove the signing identity
@@ -57,8 +59,8 @@ jobs:
         with:
           name: Levant-${{ github.run_number }}
           path: |
-            dist/Levant-2.7.1.zip
-            dist/Levant-2.7.1.zip.sha256
+            dist/Levant-2.8.0.zip
+            dist/Levant-2.8.0.zip.sha256
             dist/signing.txt
           if-no-files-found: error
           retention-days: 30

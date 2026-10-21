@@ -27,7 +27,7 @@ struct AppearanceSettings: View {
                         SkinTile(skin: skin)
                     }
                 }
-                SettingToggle("Dock icon follows the skin", isOn: Binding(
+                SettingToggle("App icon follows the skin", isOn: Binding(
                     get: { store.preference.dockIconFollowsSkin },
                     set: { store.setDockIconFollowsSkin($0) }
                 ))

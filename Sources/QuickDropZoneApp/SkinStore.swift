@@ -132,7 +132,7 @@ final class SkinStore {
     @MainActor
     private func skinChanged() {
         applyToWindows()
-        applyDockIcon()
+        applyAppIcon()
     }
 
     /// Every titled window and the panel follows the skin's light or dark appearance.
@@ -145,14 +145,17 @@ final class SkinStore {
         }
     }
 
-    /// The Dock icon for the skin in use. Oyster, the default, is the app's own icon.
+    /// The Dock icon and the icon on the app in Finder for the skin in use. Oyster, the default,
+    /// is the app's own icon.
     @MainActor
-    func applyDockIcon() {
-        if preference.dockIconFollowsSkin, skin != .oyster, let image = bundledIcon(for: skin) {
+    func applyAppIcon() {
+        let iconSkin = preference.dockIconFollowsSkin && skin != .oyster ? skin : nil
+        if let iconSkin, let image = bundledIcon(for: iconSkin) {
             NSApplication.shared.applicationIconImage = image
         } else {
             NSApplication.shared.applicationIconImage = nil
         }
+        FinderIcon.show(iconSkin)
     }
 
     /// The icon drawn for a skin (bundled in Resources/SkinIcons), or nil if it isn't there.

@@ -8,6 +8,7 @@ struct QuickDropZoneApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
+        FinderIcon.runTestCommandIfAsked()
         // Before anything reads a setting: bring Quick Drop Zone's settings across once.
         LegacyDataMigration.runIfNeeded()
     }
