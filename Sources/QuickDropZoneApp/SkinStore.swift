@@ -148,22 +148,26 @@ final class SkinStore {
     /// The Dock icon for the skin in use. Oyster, the default, is the app's own icon.
     @MainActor
     func applyDockIcon() {
-        if preference.dockIconFollowsSkin, skin != .oyster, let image = iconImage(for: skin) {
+        if preference.dockIconFollowsSkin, skin != .oyster, let image = bundledIcon(for: skin) {
             NSApplication.shared.applicationIconImage = image
         } else {
             NSApplication.shared.applicationIconImage = nil
         }
     }
 
-    /// The icon drawn for a skin (bundled in Resources/SkinIcons), or the app's own icon if it is missing.
+    /// The icon drawn for a skin (bundled in Resources/SkinIcons), or nil if it isn't there.
+    @MainActor
+    func bundledIcon(for skin: Skin) -> NSImage? {
+        if let cached = iconCache[skin] { return cached }
+        guard let url = Bundle.main.url(forResource: "icon-\(skin.rawValue)", withExtension: "png", subdirectory: "SkinIcons"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        iconCache[skin] = image
+        return image
+    }
+
+    /// The icon for a skin, or the app's own icon if it isn't bundled (for the sidebar and the panel).
     @MainActor
     func iconImage(for skin: Skin) -> NSImage {
-        if let cached = iconCache[skin] { return cached }
-        if let url = Bundle.main.url(forResource: "icon-\(skin.rawValue)", withExtension: "png", subdirectory: "SkinIcons"),
-           let image = NSImage(contentsOf: url) {
-            iconCache[skin] = image
-            return image
-        }
-        return NSApplication.shared.applicationIconImage
+        bundledIcon(for: skin) ?? NSApplication.shared.applicationIconImage
     }
 }
