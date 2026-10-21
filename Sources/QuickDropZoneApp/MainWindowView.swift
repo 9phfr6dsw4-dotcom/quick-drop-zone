@@ -71,7 +71,7 @@ struct TopBar: View {
         .padding(.leading, sidebarVisible ? 16 : 84)
         .padding(.trailing, 18)
         .frame(height: 46)
-        .background(Color.white.opacity(0.025))
+        .background(QDZStyle.raised(0.025))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(QDZStyle.hairline)
@@ -92,7 +92,7 @@ struct BarButton: View {
                 .font(.system(size: 14))
                 .foregroundStyle(hovering ? Color.primary : Color.secondary)
                 .frame(width: 30, height: 28)
-                .background(hovering ? Color.white.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .background(hovering ? QDZStyle.wash(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -121,7 +121,7 @@ struct WatchPill: View {
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.06), in: Capsule())
+            .background(QDZStyle.wash(0.06), in: Capsule())
             .overlay(Capsule().strokeBorder(QDZStyle.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -181,7 +181,7 @@ struct SidebarView: View {
 struct SidebarBackground: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            Color.black.opacity(0.24)
+            QDZStyle.sidebarFill
             Circle()
                 .fill(QDZStyle.brass.opacity(0.2))
                 .frame(width: 230, height: 230)
@@ -197,10 +197,10 @@ struct SidebarBackground: View {
 struct BrandMark: View {
     var body: some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSApp.applicationIconImage)
+            Image(nsImage: SkinStore.shared.iconImage(for: SkinStore.shared.skin))
                 .resizable()
                 .interpolation(.high)
-                .frame(width: 36, height: 36)
+                .frame(width: 42, height: 42)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Levant")
                     .font(.system(size: 13, weight: .semibold))
@@ -239,7 +239,7 @@ struct SidebarRow: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Color.white.opacity(0.1), in: Capsule())
+                        .background(QDZStyle.wash(0.1), in: Capsule())
                 }
             }
             .font(.system(size: 13.5, weight: isSelected ? .medium : .regular))
@@ -250,7 +250,7 @@ struct SidebarRow: View {
                     selectionPill
                 } else if hovering {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
+                        .fill(QDZStyle.wash(0.05))
                 }
             }
             .contentShape(Rectangle())
@@ -265,7 +265,7 @@ struct SidebarRow: View {
     /// The brass-edged highlight; it slides from page to page.
     private var selectionPill: some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(LinearGradient(colors: [Color.white.opacity(0.14), Color.white.opacity(0.07)], startPoint: .top, endPoint: .bottom))
+            .fill(LinearGradient(colors: [QDZStyle.raised(0.14), QDZStyle.raised(0.07)], startPoint: .top, endPoint: .bottom))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(LinearGradient(
@@ -300,25 +300,9 @@ struct IntelligenceCard: View {
         .cardSurface(radius: 12)
     }
 
-    /// A small colourful tile, in the spirit of Apple's own Apple Intelligence glyph.
+    /// The Apple Intelligence mark: seven interlaced loops on a light tile.
     private func tile(available: Bool) -> some View {
-        let colors: [Color] = [
-            Color(red: 1.0, green: 0.62, blue: 0.3),
-            Color(red: 0.96, green: 0.38, blue: 0.58),
-            Color(red: 0.62, green: 0.42, blue: 0.96),
-            Color(red: 0.32, green: 0.58, blue: 1.0),
-            Color(red: 1.0, green: 0.62, blue: 0.3)
-        ]
-        return ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(AngularGradient(colors: colors, center: .center))
-                .saturation(available ? 1 : 0)
-                .opacity(available ? 1 : 0.45)
-            Image(systemName: available ? "sparkles" : "sparkles.slash")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.white)
-        }
-        .frame(width: 30, height: 30)
+        IntelligenceMark(available: available)
     }
 }
 
@@ -831,6 +815,7 @@ struct SettingsTab: View {
     var body: some View {
         @Bindable var model = model
         Page(title: "Settings", subtitle: "How much Levant does on its own, and what it watches.") {
+            AppearanceSettings()
             GroupBox("Apple Intelligence") {
                 VStack(alignment: .leading, spacing: 8) {
                     SettingToggle("Use Apple Intelligence on this Mac", isOn: $model.aiEnabled)

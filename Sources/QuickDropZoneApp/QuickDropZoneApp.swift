@@ -32,6 +32,7 @@ struct QuickDropZoneApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        SkinStore.shared.start()
         StatusItemController.shared.install()
         AppModel.shared.start()
         UpdateController.shared.start()
@@ -139,7 +140,7 @@ final class StatusItemController: NSObject, NSWindowDelegate, NSDraggingDestinat
         panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.appearance = NSAppearance(named: .darkAqua)
+        panel.appearance = NSAppearance(named: SkinStore.shared.skin.isDark ? .darkAqua : .aqua)
         panel.backgroundColor = QDZStyle.windowBackgroundNS
         panel.contentView = NSHostingView(rootView: PanelView().environment(AppModel.shared))
         return panel
@@ -203,7 +204,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 840, height: 580)
-        window.appearance = NSAppearance(named: .darkAqua)
+        window.appearance = NSAppearance(named: SkinStore.shared.skin.isDark ? .darkAqua : .aqua)
         window.backgroundColor = QDZStyle.windowBackgroundNS
         window.contentViewController = NSHostingController(rootView: MainWindowView().environment(AppModel.shared))
         window.setContentSize(NSSize(width: 920, height: 760))

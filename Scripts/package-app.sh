@@ -8,7 +8,7 @@ APP="dist/Levant.app"
 ICONSET="dist/AppIcon.iconset"
 ICON_OUT="dist/AppIcon-compiled"
 VERIFY_DIR="dist/verify-extracted"
-ZIP="dist/Levant-2.6.0.zip"
+ZIP="dist/Levant-2.7.0.zip"
 SIGNING_REPORT="dist/signing.txt"
 SIGN_MODE="${SIGN_MODE:-adhoc}"
 export SIGN_MODE
@@ -19,6 +19,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 cp .build/release/Levant "$APP/Contents/MacOS/Levant"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/Acknowledgements.txt "$APP/Contents/Resources/Acknowledgements.txt"
+# One Dock icon per skin; the app swaps to the one for the skin in use.
+mkdir -p "$APP/Contents/Resources/SkinIcons"
+cp Resources/SkinIcons/icon-*.png "$APP/Contents/Resources/SkinIcons/"
+test "$(ls "$APP/Contents/Resources/SkinIcons" | wc -l | tr -d ' ')" = "8"
 
 # Sparkle comes from the exact version SwiftPM resolved and checksummed.
 SPARKLE_FRAMEWORKS=()
@@ -86,13 +90,14 @@ expect_plist() {
 plutil -lint "$APP/Contents/Info.plist"
 expect_plist LSUIElement true
 expect_plist LSMinimumSystemVersion 26.0
-expect_plist CFBundleShortVersionString 2.6.0
-expect_plist CFBundleVersion 12
+expect_plist CFBundleShortVersionString 2.7.0
+expect_plist CFBundleVersion 13
 expect_plist CFBundleIconFile AppIcon
 expect_plist CFBundleIconName AppIcon
 expect_plist SUFeedURL "https://github.com/echoappstudio/Levant/releases/latest/download/appcast.xml"
 test -s "$APP/Contents/Resources/AppIcon.icns"
 test -s "$APP/Contents/Resources/Assets.car"
+test -s "$APP/Contents/Resources/SkinIcons/icon-slate.png"
 
 # Signing is the last change to the app; everything after only zips, checks and hashes it.
 bash Scripts/sign-app.sh "$APP"
@@ -114,6 +119,7 @@ if [ ! -s "$EXTRACTED_APP/Contents/Resources/Assets.car" ]; then
     echo "error: Assets.car (the macOS 26+ icon) is missing inside the ZIP" >&2
     exit 1
 fi
+test -s "$EXTRACTED_APP/Contents/Resources/SkinIcons/icon-mint.png"
 test -x "$EXTRACTED_APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
 test -L "$EXTRACTED_APP/Contents/Frameworks/Sparkle.framework/Versions/Current"
 expect_plist_in() {
@@ -124,8 +130,8 @@ expect_plist_in() {
         exit 1
     fi
 }
-expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.6.0
-expect_plist_in "$EXTRACTED_APP" CFBundleVersion 12
+expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.7.0
+expect_plist_in "$EXTRACTED_APP" CFBundleVersion 13
 expect_plist_in "$EXTRACTED_APP" CFBundleIconName AppIcon
 expect_plist_in "$EXTRACTED_APP" SUFeedURL "https://github.com/echoappstudio/Levant/releases/latest/download/appcast.xml"
 plutil -lint "$EXTRACTED_APP/Contents/Info.plist"

@@ -14,7 +14,8 @@ import sys
 from pathlib import Path
 
 ICON = Path(__file__).resolve().parent.parent / "Resources" / "AppIcon.icon"
-FRONT_TO_BACK = ["chevron", "glass", "slot", "ticks", "chamber", "bezel"]
+FRONT_TO_BACK = ["lip", "chevron", "glass", "slot", "ticks", "chamber", "bezel"]
+SKINS = ["slate", "oyster", "sky", "submariner", "turquoise", "bordeaux", "wisteria", "mint"]
 MAX_GROUPS = 4
 
 
@@ -34,6 +35,10 @@ def main() -> int:
     for path in sorted((ICON / "Assets").iterdir()):
         if path.name not in images:
             problems.append(f"Assets/{path.name} is not used by icon.json")
+    skin_icons = ICON.parent / "SkinIcons"
+    for skin in SKINS:
+        if not (skin_icons / f"icon-{skin}.png").is_file():
+            problems.append(f"missing Resources/SkinIcons/icon-{skin}.png")
     for problem in problems:
         print(f"error: {problem}", file=sys.stderr)
     if not problems:
