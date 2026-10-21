@@ -252,7 +252,7 @@ jobs:
             exit 1
           fi
           gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --latest
-          for attempt in 1 2 3 4 5 6; do
+          for attempt in $(seq 1 30); do
             if curl -fsSL -o advertised.xml "$FEED_URL" && [ "$($tool feed-build advertised.xml)" = "$BUILD" ]; then
               echo "The feed now offers build $BUILD."
               exit 0
