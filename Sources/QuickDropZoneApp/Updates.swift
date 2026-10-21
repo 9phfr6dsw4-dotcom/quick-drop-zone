@@ -3,11 +3,11 @@ import Observation
 import QuickDropZoneCore
 import Sparkle
 
-/// Quick Drop Zone's automatic updates, through Sparkle.
+/// Levant's automatic updates, through Sparkle.
 ///
 /// Sparkle checks every hour (set in Info.plist) and once right after launch. When automatic
-/// installs are on, a downloaded update is installed and Quick Drop Zone relaunched once no file
-/// is waiting to be filed. Quick Drop Zone lives in the menu bar, so an update found by a scheduled
+/// installs are on, a downloaded update is installed and Levant relaunched once no file
+/// is waiting to be filed. Levant lives in the menu bar, so an update found by a scheduled
 /// check shows as a row in the panel instead of a window that may open behind other apps.
 @MainActor
 @Observable
@@ -18,7 +18,7 @@ final class UpdateController: NSObject {
     private(set) var automaticallyChecks = false
     private(set) var automaticallyInstalls = false
     private(set) var lastCheckDate: Date?
-    /// A background check found an update and Quick Drop Zone is waiting for the user to look at it.
+    /// A background check found an update and Levant is waiting for the user to look at it.
     private(set) var updateWaiting: String?
 
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
@@ -78,7 +78,7 @@ final class UpdateController: NSObject {
         lastCheckDate = updater.lastUpdateCheckDate
     }
 
-    /// Runs `install` once Quick Drop Zone isn't busy any more.
+    /// Runs `install` once Levant isn't busy any more.
     private func installWhenIdle(_ install: @escaping () -> Void) {
         pendingInstall = install
         installWaitTask?.cancel()
@@ -99,7 +99,7 @@ final class UpdateController: NSObject {
 }
 
 extension UpdateController: SPUUpdaterDelegate {
-    /// With automatic installs on, Sparkle hands over the downloaded update; Quick Drop Zone installs
+    /// With automatic installs on, Sparkle hands over the downloaded update; Levant installs
     /// and relaunches as soon as it's idle instead of waiting for the next quit.
     @objc(updater:willInstallUpdateOnQuit:immediateInstallationBlock:)
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {

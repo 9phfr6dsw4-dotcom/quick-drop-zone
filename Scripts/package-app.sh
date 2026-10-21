@@ -4,19 +4,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-APP="dist/Quick Drop Zone.app"
+APP="dist/Levant.app"
 ICONSET="dist/AppIcon.iconset"
 ICON_OUT="dist/AppIcon-compiled"
 VERIFY_DIR="dist/verify-extracted"
-ZIP="dist/Quick-Drop-Zone-2.5.2.zip"
+ZIP="dist/Levant-2.6.0.zip"
 SIGNING_REPORT="dist/signing.txt"
 SIGN_MODE="${SIGN_MODE:-adhoc}"
 export SIGN_MODE
 
-swift build -c release --product QuickDropZone
+swift build -c release --product Levant
 rm -rf "$APP" "$ICONSET" "$ICON_OUT" "$VERIFY_DIR" "$ZIP" "$ZIP.sha256" "$SIGNING_REPORT" "dist/notarize"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks" dist
-cp .build/release/QuickDropZone "$APP/Contents/MacOS/QuickDropZone"
+cp .build/release/Levant "$APP/Contents/MacOS/Levant"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/Acknowledgements.txt "$APP/Contents/Resources/Acknowledgements.txt"
 
@@ -33,8 +33,8 @@ ditto "${SPARKLE_FRAMEWORKS[0]}" "$APP/Contents/Frameworks/Sparkle.framework"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Frameworks/Sparkle.framework/Resources/Info.plist" | grep -Fx '2.10.0'
 test -x "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
 test -x "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater"
-otool -L "$APP/Contents/MacOS/QuickDropZone" | grep -F '@rpath/Sparkle.framework/Versions/B/Sparkle'
-otool -l "$APP/Contents/MacOS/QuickDropZone" | grep -F 'path @executable_path/../Frameworks'
+otool -L "$APP/Contents/MacOS/Levant" | grep -F '@rpath/Sparkle.framework/Versions/B/Sparkle'
+otool -l "$APP/Contents/MacOS/Levant" | grep -F 'path @executable_path/../Frameworks'
 grep -F 'Sparkle 2.10.0' "$APP/Contents/Resources/Acknowledgements.txt"
 
 swift Scripts/GenerateIcon.swift "$ICONSET" "Resources/AppIcon-1024.png"
@@ -71,7 +71,7 @@ if [ "$icon_name" != "AppIcon" ]; then
 fi
 # Only Assets.car is copied; the classic AppIcon.icns above stays as the fallback.
 cp "$ICON_OUT/Assets.car" "$APP/Contents/Resources/Assets.car"
-chmod 755 "$APP/Contents/MacOS/QuickDropZone"
+chmod 755 "$APP/Contents/MacOS/Levant"
 
 # Each check names the key that doesn't match, so a failure is never silent.
 expect_plist() {
@@ -86,11 +86,11 @@ expect_plist() {
 plutil -lint "$APP/Contents/Info.plist"
 expect_plist LSUIElement true
 expect_plist LSMinimumSystemVersion 26.0
-expect_plist CFBundleShortVersionString 2.5.2
-expect_plist CFBundleVersion 11
+expect_plist CFBundleShortVersionString 2.6.0
+expect_plist CFBundleVersion 12
 expect_plist CFBundleIconFile AppIcon
 expect_plist CFBundleIconName AppIcon
-expect_plist SUFeedURL "https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest/download/appcast.xml"
+expect_plist SUFeedURL "https://github.com/echoappstudio/Levant/releases/latest/download/appcast.xml"
 test -s "$APP/Contents/Resources/AppIcon.icns"
 test -s "$APP/Contents/Resources/Assets.car"
 
@@ -107,8 +107,8 @@ fi
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 mkdir -p "$VERIFY_DIR"
 ditto -x -k "$ZIP" "$VERIFY_DIR"
-EXTRACTED_APP="$VERIFY_DIR/Quick Drop Zone.app"
-test -x "$EXTRACTED_APP/Contents/MacOS/QuickDropZone"
+EXTRACTED_APP="$VERIFY_DIR/Levant.app"
+test -x "$EXTRACTED_APP/Contents/MacOS/Levant"
 python3 Scripts/test_icon_package.py "$ROOT_DIR/Resources/AppIcon-1024.png" "$ROOT_DIR/$EXTRACTED_APP"
 if [ ! -s "$EXTRACTED_APP/Contents/Resources/Assets.car" ]; then
     echo "error: Assets.car (the macOS 26+ icon) is missing inside the ZIP" >&2
@@ -124,17 +124,17 @@ expect_plist_in() {
         exit 1
     fi
 }
-expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.5.2
-expect_plist_in "$EXTRACTED_APP" CFBundleVersion 11
+expect_plist_in "$EXTRACTED_APP" CFBundleShortVersionString 2.6.0
+expect_plist_in "$EXTRACTED_APP" CFBundleVersion 12
 expect_plist_in "$EXTRACTED_APP" CFBundleIconName AppIcon
-expect_plist_in "$EXTRACTED_APP" SUFeedURL "https://github.com/9phfr6dsw4-dotcom/quick-drop-zone/releases/latest/download/appcast.xml"
+expect_plist_in "$EXTRACTED_APP" SUFeedURL "https://github.com/echoappstudio/Levant/releases/latest/download/appcast.xml"
 plutil -lint "$EXTRACTED_APP/Contents/Info.plist"
 codesign --verify --deep --strict "$EXTRACTED_APP"
 if [[ "$NOTARIZED" == "yes" ]]; then
     xcrun stapler validate "$EXTRACTED_APP"
     spctl --assess --type execute --verbose=2 "$EXTRACTED_APP"
 fi
-file "$EXTRACTED_APP/Contents/MacOS/QuickDropZone"
+file "$EXTRACTED_APP/Contents/MacOS/Levant"
 bash Scripts/write-checksum-sidecar.sh "$ZIP"
 {
     printf 'mode=%s\n' "$SIGN_MODE"

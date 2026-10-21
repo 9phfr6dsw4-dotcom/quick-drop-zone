@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Updates an older Quick Drop Zone to a newer one through Sparkle, using a test feed on this Mac:
-#   1. with automatic checks turned off in Quick Drop Zone's saved settings, it doesn't check;
+# Updates an older Levant to a newer one through Sparkle, using a test feed on this Mac:
+#   1. with automatic checks turned off in Levant's saved settings, it doesn't check;
 #   2. an update whose signature doesn't match is downloaded but never installed;
-#   3. a correctly signed update is installed and Quick Drop Zone relaunches as the new version,
+#   3. a correctly signed update is installed and Levant relaunches as the new version,
 #      with its settings kept and (for a real signing identity) the same code identity.
 # The two test copies are the packaged app with a test feed address, a throwaway signing key and
 # their own version numbers, re-signed by the same script as the release. Needs OpenSSL 3.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE_APP="$ROOT_DIR/dist/Quick Drop Zone.app"
+SOURCE_APP="$ROOT_DIR/dist/Levant.app"
 RELEASE_TOOL=(python3 -I "$ROOT_DIR/Scripts/release/sparkle_release.py")
-DOMAIN="com.quickdropzone.app"
+DOMAIN="com.echoapps.levant"
 PORT=8765
 FEED_URL="http://127.0.0.1:$PORT/appcast.xml"
 SIGN_MODE="${SIGN_MODE:-adhoc}"
@@ -24,10 +24,10 @@ fi
 export SPARKLE_OPENSSL
 "$SPARKLE_OPENSSL" version | grep -q '^OpenSSL 3'
 
-WORK_DIR="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/quickdropzone-update.XXXXXX")"
+WORK_DIR="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/levant-update.XXXXXX")"
 FEED_DIR="$WORK_DIR/feed"
 INSTALL_DIR="$WORK_DIR/Applications"
-INSTALLED_APP="$INSTALL_DIR/Quick Drop Zone.app"
+INSTALLED_APP="$INSTALL_DIR/Levant.app"
 SERVER_LOG="$WORK_DIR/server.log"
 mkdir -p "$FEED_DIR" "$INSTALL_DIR" "$WORK_DIR/old" "$WORK_DIR/new"
 SERVER_PID=""
@@ -35,7 +35,7 @@ SERVER_PID=""
 cleanup() {
     status=$?
     trap - EXIT
-    pkill -x QuickDropZone >/dev/null 2>&1 || true
+    pkill -x Levant >/dev/null 2>&1 || true
     if [[ -n "$SERVER_PID" ]]; then
         kill "$SERVER_PID" >/dev/null 2>&1 || true
     fi
@@ -70,14 +70,14 @@ make_copy() {
     bash "$ROOT_DIR/Scripts/sign-app.sh" "$destination"
 }
 
-make_copy "$WORK_DIR/old/Quick Drop Zone.app" "$OLD_BUILD" "$BASE_VERSION"
-make_copy "$WORK_DIR/new/Quick Drop Zone.app" "$NEW_BUILD" "$NEW_VERSION"
-OLD_REQUIREMENT="$(codesign --display --requirements - "$WORK_DIR/old/Quick Drop Zone.app" 2>/dev/null | sed -n 's/^designated => //p')"
-NEW_REQUIREMENT="$(codesign --display --requirements - "$WORK_DIR/new/Quick Drop Zone.app" 2>/dev/null | sed -n 's/^designated => //p')"
+make_copy "$WORK_DIR/old/Levant.app" "$OLD_BUILD" "$BASE_VERSION"
+make_copy "$WORK_DIR/new/Levant.app" "$NEW_BUILD" "$NEW_VERSION"
+OLD_REQUIREMENT="$(codesign --display --requirements - "$WORK_DIR/old/Levant.app" 2>/dev/null | sed -n 's/^designated => //p')"
+NEW_REQUIREMENT="$(codesign --display --requirements - "$WORK_DIR/new/Levant.app" 2>/dev/null | sed -n 's/^designated => //p')"
 test -n "$OLD_REQUIREMENT"
 
-ARCHIVE="$FEED_DIR/Quick-Drop-Zone-$NEW_VERSION.zip"
-ditto -c -k --sequesterRsrc --keepParent "$WORK_DIR/new/Quick Drop Zone.app" "$ARCHIVE"
+ARCHIVE="$FEED_DIR/Levant-$NEW_VERSION.zip"
+ditto -c -k --sequesterRsrc --keepParent "$WORK_DIR/new/Levant.app" "$ARCHIVE"
 GOOD_SIGNATURE="$("${RELEASE_TOOL[@]}" sign --seed-env TEST_SPARKLE_KEY "$ARCHIVE")"
 "${RELEASE_TOOL[@]}" verify --public-key "$PUBLIC_KEY" "$ARCHIVE" "$GOOD_SIGNATURE"
 printf 'not the update' > "$WORK_DIR/other.bin"
@@ -87,10 +87,10 @@ printf -- '- Test update.\n' > "$WORK_DIR/notes.md"
 write_feed() {
     local signature="$1" output="$2"
     # The feed must say https; the test copies only reach it through 127.0.0.1.
-    "${RELEASE_TOOL[@]}" feed --app-name "Quick Drop Zone" --version "$NEW_VERSION" --build "$NEW_BUILD" \
-        --url "https://placeholder.invalid/Quick-Drop-Zone.zip" --archive "$ARCHIVE" --signature "$signature" \
+    "${RELEASE_TOOL[@]}" feed --app-name "Levant" --version "$NEW_VERSION" --build "$NEW_BUILD" \
+        --url "https://placeholder.invalid/Levant.zip" --archive "$ARCHIVE" --signature "$signature" \
         --minimum-system 26.0 --notes "$WORK_DIR/notes.md" --output "$output"
-    sed -i '' "s|https://placeholder.invalid/Quick-Drop-Zone.zip|http://127.0.0.1:$PORT/$(basename "$ARCHIVE")|" "$output"
+    sed -i '' "s|https://placeholder.invalid/Levant.zip|http://127.0.0.1:$PORT/$(basename "$ARCHIVE")|" "$output"
     "${RELEASE_TOOL[@]}" sign-feed --seed-env TEST_SPARKLE_KEY "$output"
     "${RELEASE_TOOL[@]}" verify-feed --public-key "$PUBLIC_KEY" "$output"
 }
@@ -129,23 +129,23 @@ archive_requests() {
 launch_installed() {
     open -n -g "$INSTALLED_APP"
     for _ in {1..20}; do
-        if pgrep -x QuickDropZone >/dev/null 2>&1; then return 0; fi
+        if pgrep -x Levant >/dev/null 2>&1; then return 0; fi
         sleep 0.5
     done
-    printf 'Quick Drop Zone did not start.\n' >&2
+    printf 'Levant did not start.\n' >&2
     return 1
 }
 
-quit_quickdropzone() {
-    pkill -x QuickDropZone >/dev/null 2>&1 || true
+quit_levant() {
+    pkill -x Levant >/dev/null 2>&1 || true
     for _ in {1..20}; do
-        if ! pgrep -x QuickDropZone >/dev/null 2>&1; then return 0; fi
+        if ! pgrep -x Levant >/dev/null 2>&1; then return 0; fi
         sleep 0.5
     done
-    pkill -9 -x QuickDropZone >/dev/null 2>&1 || true
+    pkill -9 -x Levant >/dev/null 2>&1 || true
 }
 
-ditto "$WORK_DIR/old/Quick Drop Zone.app" "$INSTALLED_APP"
+ditto "$WORK_DIR/old/Levant.app" "$INSTALLED_APP"
 MARKER="kept-$(date +%s)"
 defaults write "$DOMAIN" QuickDropZone.updateTestMarker -string "$MARKER"
 defaults write "$DOMAIN" SUAutomaticallyUpdate -bool true
@@ -154,12 +154,12 @@ defaults write "$DOMAIN" SUAutomaticallyUpdate -bool true
 defaults write "$DOMAIN" SULastCheckTime -date "$(date -u '+%Y-%m-%d %H:%M:%S +0000')"
 defaults delete "$DOMAIN" SUSkippedVersion >/dev/null 2>&1 || true
 
-echo "1. Automatic checks off: Quick Drop Zone must not check."
+echo "1. Automatic checks off: Levant must not check."
 cp "$WORK_DIR/appcast-good.xml" "$FEED_DIR/appcast.xml"
 defaults write "$DOMAIN" SUEnableAutomaticChecks -bool false
 launch_installed
 sleep 20
-quit_quickdropzone
+quit_levant
 test "$(feed_requests)" -eq 0
 test "$(installed_build)" = "$OLD_BUILD"
 echo "   No check was made."
@@ -176,20 +176,20 @@ test "$(feed_requests)" -ge 1
 test "$(archive_requests)" -ge 1
 sleep 20
 test "$(installed_build)" = "$OLD_BUILD"
-quit_quickdropzone
+quit_levant
 test "$(installed_build)" = "$OLD_BUILD"
 echo "   The update was downloaded and refused."
 
-echo "3. A signed update installs and Quick Drop Zone relaunches."
+echo "3. A signed update installs and Levant relaunches."
 cp "$WORK_DIR/appcast-good.xml" "$FEED_DIR/appcast.xml"
 defaults write "$DOMAIN" SULastCheckTime -date "$(date -u '+%Y-%m-%d %H:%M:%S +0000')"
 REQUESTS_BEFORE="$(feed_requests)"
 launch_installed
-OLD_PID="$(pgrep -x QuickDropZone | head -n 1)"
+OLD_PID="$(pgrep -x Levant | head -n 1)"
 NEW_PID=""
 for _ in {1..180}; do
     if [[ "$(installed_build)" == "$NEW_BUILD" ]]; then
-        NEW_PID="$(pgrep -x QuickDropZone | grep -vx "$OLD_PID" | head -n 1 || true)"
+        NEW_PID="$(pgrep -x Levant | grep -vx "$OLD_PID" | head -n 1 || true)"
         if [[ -n "$NEW_PID" ]]; then break; fi
     fi
     sleep 1
@@ -200,12 +200,12 @@ if [[ "$(installed_build)" != "$NEW_BUILD" ]]; then
     exit 1
 fi
 if [[ -z "$NEW_PID" ]]; then
-    printf 'The update was installed but Quick Drop Zone did not relaunch.\n' >&2
+    printf 'The update was installed but Levant did not relaunch.\n' >&2
     exit 1
 fi
 RUNNING_PATH="$(ps -o comm= -p "$NEW_PID")"
-if [[ "$(realpath "$RUNNING_PATH")" != "$(realpath "$INSTALLED_APP/Contents/MacOS/QuickDropZone")" ]]; then
-    printf 'The relaunched Quick Drop Zone runs from %s, not the updated app.\n' "$RUNNING_PATH" >&2
+if [[ "$(realpath "$RUNNING_PATH")" != "$(realpath "$INSTALLED_APP/Contents/MacOS/Levant")" ]]; then
+    printf 'The relaunched Levant runs from %s, not the updated app.\n' "$RUNNING_PATH" >&2
     exit 1
 fi
 codesign --verify --deep --strict "$INSTALLED_APP"

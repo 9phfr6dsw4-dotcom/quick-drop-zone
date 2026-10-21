@@ -7,6 +7,11 @@ import UniformTypeIdentifiers
 struct QuickDropZoneApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    init() {
+        // Before anything reads a setting: bring Quick Drop Zone's settings across once.
+        LegacyDataMigration.runIfNeeded()
+    }
+
     var body: some Scene {
         Settings {
             SettingsTab()
@@ -91,8 +96,8 @@ final class StatusItemController: NSObject, NSWindowDelegate, NSDraggingDestinat
     func install() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "tray.and.arrow.down.fill", accessibilityDescription: "Quick Drop Zone")
-            button.toolTip = "Quick Drop Zone — click to open, or drop files here"
+            button.image = NSImage(systemSymbolName: "tray.and.arrow.down.fill", accessibilityDescription: "Levant")
+            button.toolTip = "Levant — click to open, or drop files here"
             button.target = self
             button.action = #selector(togglePanel)
             // Files can be dropped straight onto the menu-bar icon.
@@ -172,7 +177,7 @@ final class StatusItemController: NSObject, NSWindowDelegate, NSDraggingDestinat
     }
 }
 
-/// The main window, opened from the panel. Quick Drop Zone shows a Dock icon only while it's open.
+/// The main window, opened from the panel. Levant shows a Dock icon only while it's open.
 @MainActor
 final class MainWindowController: NSObject, NSWindowDelegate {
     static let shared = MainWindowController()
@@ -191,7 +196,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 760),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
-        window.title = "Quick Drop Zone"
+        window.title = "Levant"
         // The sidebar runs up under the window's buttons; the name and icon are drawn in the sidebar.
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true

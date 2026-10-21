@@ -40,7 +40,7 @@ struct PendingFile {
     var isThinking: Bool
 }
 
-/// Everything Quick Drop Zone does. Moves are always undoable; nothing is ever deleted.
+/// Everything Levant does. Moves are always undoable; nothing is ever deleted.
 @MainActor
 @Observable
 final class AppModel {
@@ -139,7 +139,7 @@ final class AppModel {
     @ObservationIgnored private var watchScopes: [URL] = []
     @ObservationIgnored private var watchQueue: [URL] = []
     @ObservationIgnored private var isProcessingQueue = false
-    /// Files Quick Drop Zone put back or renamed itself; watching never acts on them again.
+    /// Files Levant put back or renamed itself; watching never acts on them again.
     @ObservationIgnored private var handledPaths: Set<String> = []
     @ObservationIgnored private let searcher = FileSearcher()
 
@@ -187,7 +187,7 @@ final class AppModel {
 
     /// nil when Apple Intelligence can be used; otherwise why not.
     var aiUnavailableReason: String? {
-        if !aiEnabled { return "Apple Intelligence is turned off in Quick Drop Zone's settings." }
+        if !aiEnabled { return "Apple Intelligence is turned off in Levant's settings." }
         return OnDeviceModel.unavailableReason
     }
 

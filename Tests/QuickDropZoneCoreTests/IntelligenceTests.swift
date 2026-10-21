@@ -231,7 +231,7 @@ final class AutoMoveTests: XCTestCase {
         XCTAssertEqual(state.update([old], now: start.addingTimeInterval(91)), [])
         XCTAssertEqual(state.update([old, grown], now: start.addingTimeInterval(92)), [])
         XCTAssertEqual(state.update([old, grown], now: start.addingTimeInterval(112)), ["/d/new.pdf"])
-        // Something Quick Drop Zone renamed itself is marked handled.
+        // Something Levant renamed itself is marked handled.
         let renamed = FileSnapshot(path: "/d/Lease.pdf", size: 50, modified: start)
         XCTAssertEqual(state.update([old, renamed], now: start.addingTimeInterval(113)), [])
         state.markHandled("/d/Lease.pdf")

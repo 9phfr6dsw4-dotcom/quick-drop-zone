@@ -29,3 +29,7 @@
 - Use a standard macOS GitHub Actions runner to run tests, build the native `.app`, validate the exact extracted ZIP, and smoke-launch it. CI output is the source artifact for releases.
 - README screenshots are real captures supplied by the maintainer and added in a docs change.
 - Attach the tested ZIP and checksum sidecar to a versioned GitHub Release, then verify the public download against the CI checksum. An Actions artifact or successful compile alone is not the final user handoff.
+
+## Name
+
+- The app was called Quick Drop Zone until 2.5.2 and has been **Levant** since 2.6.0, a clean break: new bundle ID (`com.echoapps.levant`), executable, ZIP name and update address. On first launch Levant moves Quick Drop Zone's saved settings across once (`LegacyDataMigrationPolicy`) and never touches the old app's data. Swift module names, the `QuickDropZone.*` setting keys and the check name `Test and package on macOS 26` stay as they were on purpose.

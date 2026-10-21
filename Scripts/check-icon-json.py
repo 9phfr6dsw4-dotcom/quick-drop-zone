@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks Resources/AppIcon.icon/icon.json before the icon is compiled.
 
-In an Icon Composer file the FIRST group and the FIRST layer are the FRONT-most. Quick Drop Zone's
+In an Icon Composer file the FIRST group and the FIRST layer are the FRONT-most. Levant's
 2.2.0 icon came out black because the full-size dark bezel was listed first and covered everything.
 Apple's compiler also allows at most four groups ("Too many visible groups", 2.3.0's first CI run).
 This fails if that order is wrong, there are more than four groups, a named image is missing, or a file

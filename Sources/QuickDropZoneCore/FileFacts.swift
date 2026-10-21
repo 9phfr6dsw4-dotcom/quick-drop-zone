@@ -43,7 +43,7 @@ public enum FileKind: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// What Quick Drop Zone found out about one file, all on this Mac: its name, kind, where it was
+/// What Levant found out about one file, all on this Mac: its name, kind, where it was
 /// downloaded from, and (when allowed) text and image labels from inside it.
 public struct FileFacts: Equatable, Sendable {
     public var fileName: String
