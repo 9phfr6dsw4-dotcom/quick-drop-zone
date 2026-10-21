@@ -2,23 +2,39 @@ import AppKit
 import QuickDropZoneCore
 import SwiftUI
 
-/// Graphite surfaces with thin champagne-brass details, matching the app icon. The app is always dark.
+/// The colours of the skin in use (Slate and Oyster by default; see `SkinStore`). Reading them while a
+/// view draws makes the view redraw when the skin changes. The names keep their old "brass" wording:
+/// `brass` is the skin's accent.
 enum QDZStyle {
-    static let brass = Color(red: 0.84, green: 0.72, blue: 0.47)
-    static let brassLight = Color(red: 0.95, green: 0.87, blue: 0.66)
-    static let brassDeep = Color(red: 0.62, green: 0.48, blue: 0.26)
-    static let hairline = Color.white.opacity(0.09)
-    static let cardFill = Color.white.opacity(0.045)
-    static let windowBackgroundNS = NSColor(calibratedRed: 0.075, green: 0.080, blue: 0.092, alpha: 1)
+    private static var palette: SkinPalette { SkinStore.shared.palette }
+
+    static var isDark: Bool { SkinStore.shared.skin.isDark }
+    static var brass: Color { Color(palette.accent) }
+    static var brassLight: Color { Color(palette.accentLight) }
+    static var brassDeep: Color { Color(palette.accentDeep) }
+    /// Text on the accent-coloured main button.
+    static var onAccent: Color { Color(palette.onAccent) }
+    static var sidebarFill: Color { Color(palette.sidebar) }
+    static var hairline: Color { wash(isDark ? 0.09 : 0.12) }
+    static var windowBackgroundNS: NSColor { NSColor(palette.backgroundDeep) }
+
+    /// A veil that darkens a light skin and lightens a dark one: white over dark skins, black over light ones.
+    static func wash(_ opacity: Double) -> Color {
+        isDark ? Color.white.opacity(opacity) : Color.black.opacity(opacity)
+    }
+
+    /// A raised surface: a faint white veil on dark skins, a strong one on light skins (where a card is nearly white).
+    static func raised(_ opacity: Double) -> Color {
+        Color.white.opacity(isDark ? opacity : min(1, opacity * 6))
+    }
 }
 
-/// Graphite with a faint warm glow in the top-left corner, like light on brushed metal.
+/// The skin's background with a faint glow of its accent in the top-left corner.
 struct WindowBackground: View {
     var body: some View {
+        let palette = SkinStore.shared.palette
         ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.108, green: 0.113, blue: 0.128), Color(red: 0.060, green: 0.064, blue: 0.074)],
-                startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [Color(palette.background), Color(palette.backgroundDeep)], startPoint: .top, endPoint: .bottom)
             RadialGradient(colors: [QDZStyle.brass.opacity(0.07), Color.clear], center: .topLeading, startRadius: 0, endRadius: 560)
         }
     }
@@ -30,20 +46,21 @@ struct CardSurface: ViewModifier {
     var hovering: Bool
 
     func body(content: Content) -> some View {
-        content
+        let dark = QDZStyle.isDark
+        let fillTop = dark ? Color.white.opacity(hovering ? 0.088 : 0.066) : Color.white.opacity(hovering ? 1.0 : 0.92)
+        let fillBottom = dark ? Color.white.opacity(hovering ? 0.052 : 0.03) : Color.white.opacity(hovering ? 0.86 : 0.7)
+        let edgeTop = dark ? Color.white.opacity(0.17) : Color.black.opacity(0.12)
+        let edgeBottom = dark ? Color.white.opacity(0.05) : Color.black.opacity(0.05)
+        return content
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [Color.white.opacity(hovering ? 0.088 : 0.066), Color.white.opacity(hovering ? 0.052 : 0.03)],
-                        startPoint: .top, endPoint: .bottom))
+                    .fill(LinearGradient(colors: [fillTop, fillBottom], startPoint: .top, endPoint: .bottom))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(LinearGradient(
-                        colors: [Color.white.opacity(0.17), Color.white.opacity(0.05)],
-                        startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                    .strokeBorder(LinearGradient(colors: [edgeTop, edgeBottom], startPoint: .top, endPoint: .bottom), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.28), radius: 10, y: 4)
+            .shadow(color: Color.black.opacity(dark ? 0.28 : 0.10), radius: 10, y: 4)
     }
 }
 
@@ -53,35 +70,41 @@ extension View {
     }
 }
 
-/// A row of fine ruler ticks in brass, echoing the dial on the app icon.
+/// A watch-dial minute track in the skin's accent: fine ticks with a longer one every fifth.
 struct TickRule: View {
     var body: some View {
-        Canvas { context, size in
-            var x: CGFloat = 0
+        let accent = QDZStyle.brass
+        return Canvas { context, size in
+            var x: CGFloat = 0.5
             var index = 0
             while x < size.width {
                 let major = index % 5 == 0
-                let fade = max(0.0, 1.0 - Double(x / size.width))
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: size.height))
-                path.addLine(to: CGPoint(x: x, y: size.height - (major ? 9 : 5)))
-                context.stroke(path, with: .color(QDZStyle.brass.opacity((major ? 0.75 : 0.4) * fade)), lineWidth: major ? 1.2 : 0.8)
-                x += 6
+                path.addLine(to: CGPoint(x: x, y: size.height - (major ? 12 : 6)))
+                context.stroke(path, with: .color(accent.opacity(major ? 0.95 : 0.5)), lineWidth: major ? 1.4 : 0.9)
+                x += 8
                 index += 1
             }
         }
-        .frame(width: 168, height: 10)
+        .frame(width: 320, height: 14)
         .accessibilityHidden(true)
     }
 }
 
 extension View {
-    /// Dark appearance, brass tint and card-style group boxes for everything inside.
+    /// The skin's tint, card-style group boxes and light or dark appearance for everything inside.
     func qdzChrome() -> some View {
-        self
+        modifier(QDZChrome())
+    }
+}
+
+struct QDZChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
             .tint(QDZStyle.brass)
             .groupBoxStyle(CardGroupBoxStyle())
-            .preferredColorScheme(.dark)
+            .preferredColorScheme(QDZStyle.isDark ? .dark : .light)
     }
 }
 
@@ -125,7 +148,7 @@ struct PillButtonStyle: ButtonStyle {
             .truncationMode(.middle)
             .padding(.horizontal, 11)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(configuration.isPressed ? 0.17 : 0.08), in: Capsule())
+            .background(QDZStyle.wash(configuration.isPressed ? 0.17 : 0.08), in: Capsule())
             .overlay(Capsule().strokeBorder(QDZStyle.hairline, lineWidth: 1))
             .opacity(isEnabled ? 1 : 0.45)
     }
@@ -140,7 +163,7 @@ struct BrassButtonStyle: ButtonStyle {
             .font(.callout.weight(.semibold))
             .lineLimit(1)
             .truncationMode(.middle)
-            .foregroundStyle(Color(red: 0.12, green: 0.09, blue: 0.03))
+            .foregroundStyle(QDZStyle.onAccent)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
             .background(
@@ -182,7 +205,7 @@ struct Chip: View {
         .foregroundStyle(highlighted ? QDZStyle.brass : Color.secondary)
         .padding(.horizontal, 9)
         .padding(.vertical, 3.5)
-        .background(highlighted ? QDZStyle.brass.opacity(0.14) : Color.white.opacity(0.08), in: Capsule())
+        .background(highlighted ? QDZStyle.brass.opacity(0.14) : QDZStyle.wash(0.08), in: Capsule())
     }
 }
 
@@ -212,8 +235,8 @@ struct PageHeader<Accessory: View>: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
-                    .font(.system(size: 28, weight: .bold))
-                    .tracking(-0.4)
+                    .font(.system(size: 32, weight: .semibold, design: .serif))
+                    .tracking(-0.3)
                 TickRule()
                 Text(subtitle)
                     .font(.system(size: 13.5))

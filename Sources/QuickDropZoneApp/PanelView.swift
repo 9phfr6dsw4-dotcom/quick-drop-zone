@@ -79,12 +79,12 @@ struct PanelView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSApp.applicationIconImage)
+            Image(nsImage: SkinStore.shared.iconImage(for: SkinStore.shared.skin))
                 .resizable()
                 .interpolation(.high)
-                .frame(width: 26, height: 26)
+                .frame(width: 30, height: 30)
             Text("Levant")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold, design: .serif))
             Spacer()
             Menu {
                 Button("Clean Up Downloads…") {
@@ -123,7 +123,9 @@ struct PanelView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(LinearGradient(
-                    colors: [Color.black.opacity(isTargeted ? 0.18 : 0.4), Color.white.opacity(isTargeted ? 0.07 : 0.025)],
+                    colors: QDZStyle.isDark
+                        ? [Color.black.opacity(isTargeted ? 0.18 : 0.4), Color.white.opacity(isTargeted ? 0.07 : 0.025)]
+                        : [Color.black.opacity(isTargeted ? 0.04 : 0.08), Color.white.opacity(isTargeted ? 0.8 : 0.55)],
                     startPoint: .top, endPoint: .bottom))
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(isTargeted ? QDZStyle.brass : QDZStyle.brass.opacity(0.35),

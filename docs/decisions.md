@@ -33,3 +33,8 @@
 ## Name
 
 - The app was called Quick Drop Zone until 2.5.2 and has been **Levant** since 2.6.0, a clean break: new bundle ID (`com.echoapps.levant`), executable, ZIP name and update address. On first launch Levant moves Quick Drop Zone's saved settings across once (`LegacyDataMigrationPolicy`) and never touches the old app's data. Swift module names, the `QuickDropZone.*` setting keys and the check name `Test and package on macOS 26` stay as they were on purpose.
+
+## Look and skins
+
+- Skins change colors and the icon only; they never change how files are found, filed or renamed. Eight skins: Slate (default dark), Oyster (default light), Sky, Submariner, Turquoise, Bordeaux, Wisteria and Mint (the second light skin). By default the Mac's light or dark setting picks Slate or Oyster; the person can change which skin each mode uses, or choose one skin that ignores the Mac's setting.
+- The palettes and the choice logic live in `QuickDropZoneCore` (`Skins.swift`) and are unit-tested, including readable contrast in every skin. The Dock icon for each skin is drawn by `Scripts/make-icon-art.py` into `Resources/SkinIcons/`; the app sets it at run time (Oyster uses the app's own icon).
