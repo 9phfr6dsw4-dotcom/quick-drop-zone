@@ -11,4 +11,12 @@ if test -z "$pid"; then
   exit 1
 fi
 kill "$pid"
+# Launching may have put a skin icon on the app in Finder (in dark mode Slate is used); later steps
+# copy and re-sign this app, so take it off again.
+for _ in {1..10}; do
+  if ! pgrep -x Levant >/dev/null 2>&1; then break; fi
+  sleep 0.5
+done
+rm -f "$APP/Icon"$'\r'
+xattr -d com.apple.FinderInfo "$APP" >/dev/null 2>&1 || true
 printf 'App launch smoke test passed (process started and was stopped cleanly).\n'

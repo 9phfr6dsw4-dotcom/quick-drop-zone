@@ -27,7 +27,7 @@
 - **Find files in plain words**, like “the PDF from the dentist last month”, using the same index as Finder search.
 - **What is this file?** A one-line summary of any file.
 - **Activity** lists everything that moved, was renamed or is waiting for you, grouped by day. Everything can be undone; nothing is ever permanently deleted.
-- **A refined, watch-dial look with eight skins** (Slate and Oyster by default, following your Mac's light and dark setting, or one skin of your choice), and a sidebar for Activity, Clean Up, Find, Folders & Rules and Settings.
+- **A refined, watch-dial look with eight skins** (Slate and Oyster by default, following your Mac's light and dark setting, or one skin of your choice; the app icon in the Dock and Finder follows the skin), and a sidebar for Activity, Clean Up, Find, Folders & Rules and Settings.
 
 ## Install
 
